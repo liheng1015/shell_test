@@ -1,0 +1,9 @@
+1、安装VNC:yum -y install vnc*   设置密码:vncserver :1
+2、NFS:(4096+随机端口)-->rpcbind[端口注册]
+3、虚拟机客户端安装语言包:yum -y install *fonts* 可装所有语言安装包
+4、keepalived的3个特点:高可用;自动配置lvs;健康检查.注意:global_defs { vrrp_iptables } 配置完之后不用每次启动keep都需要清空防火墙 iptables -F.
+5、nginx设置开机自启
+   (cd /lib/systemd/system --->cp httpd.service nginx.service --->修改配置文件
+   #echo "/usr/local/nginx/sbin/nginx" >> /etc/rc.local、 chmod +x /etc/rc.local
+   #yum -y install libcephfs1软件ceph的文件系统也可这样用)
+6、校验检查可用#md5sum /var/www/html/index.html
