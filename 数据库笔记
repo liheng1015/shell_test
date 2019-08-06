@@ -1,8 +1,6 @@
 #############################################################################################################################
------------------------------------------------------------------------------------------------------------------------------
-
-                                               day1
-day1 RDBMS1
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                               day1 RDBMS1
 DB(DataBase)
 数据库
 DBMS()
@@ -67,53 +65,54 @@ select * from t10;
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #######################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                         day2 Mysql的键值  
-约束条件:
+                                         day2 Mysql的键值 表字段处理 
+一、字段类型约束条件:
          null 允许为空
          not null 不允许为null
          key 键值类型
          default 设置默认值
          extra 额外设置
-create table db2.t2 (name char(10) not null default "",age tinyint unsigned default 19,sex enum("m","w") not null default "m");
-
-一些基本语法结构:
+   例子:create table db2.t2 (name char(10) not null default "",age tinyint unsigned default 19,sex enum("m","w") not null default "m");
+二、表字段处理的一些基本语法结构:
                  add 添加字段
                  modify 修改字段类型
                  change 修改字段名
                  drop 删除字段
                  rename 修改表名
 
-修改表结构:
-   命令 alter table 库名.表名 执行动作;
-   执行动作:
-           添加新字段 add:
-              末尾         add 字段名 类型
-               alter table db2.t1 add email varchar(50);
-              某字段列尾   add 字段名 类型 [约束条件] after 字段名;
-               alter table db2.t1 add likes set("eat","drink","game","happy") not null default "eat,drink" after age;
-              某字段列首   add 字段名 类型 [约束条件] first
+   2.1.修改表结构:
+       命令 alter table 库名.表名 执行动作;
+     2.1.1.执行动作:
+          添加新字段 add:
+            末尾  add 字段名 类型
+              alter table db2.t1 add email varchar(50);
+            某字段列尾   add 字段名 类型 [约束条件] after 字段名;
+              alter table db2.t1 add likes set("eat","drink","game","happy") not null default "eat,drink" after age;
+            某字段列首   add 字段名 类型 [约束条件] first
               alter table db2.t1 add class char(7) default "nsd1905" first;
-           修改字段类型 modify:
+      2.1.2.修改字段类型 modify:
                修改字段位置:alter table db2.t1 modify age tinyint unsigned default 19 after class;
                修改字段类型:alter table db2.t1 modify name varchar(15) not null default "";
-           修改字段名change:
+      2.1.3.修改字段名为mail使用的命令是change:
             alter table db2.t1 change email mail varchar(40);
-           删除表字段drop:
+      2.1.4.删除表字段drop:
             alter table db2.t1 drop mail;
-           修改表名rename:
+      2.1.5.修改表名rename:
             alter table db2.t1 rename db2.stuinfo;
+                                                 ------------
                                                  下午知识
-什么是索引:类似与书的目录,对表中的字段排序.索引占表物理空间,降低了数据的维护速度.好处是加快数据的查询速度.
-普通索引:使用规则
-         建表时创建索引           create table 库.表(字段列表,index(字段名),index(字段名));
-                           create table db2.t2(name char(10),age int,class char(7),email char(30),index(name),index(age));
-         在已有的表里创建索引    create index 索引名 on 表名(字段名);  
-                           create index name on db2.stuinfo(name);
-         查看索引字段:            基本查看desc 表明;key列显示索引          详细查看索引:show index from 表名 \G竖着查看
-                           desc db2.t2;                                  show index from db2.t2 \G;     
-         删除索引:                drop index 索引名 on 库.表名   drop index age on db2.t2; 
-主    键:
-什么是主键:不能赋空值,主键值不能允许重复,就是表里数据不能重复.
+                                                 ------------
+三、什么是索引:类似与书的目录,对表中的字段排序.索引占表物理空间,降低了数据的维护速度.好处是加快数据的查询速度.
+    3.1.普通索引:使用规则
+      3.1.1.建表时创建索引  格式create table 库.表(字段列表,index(字段名),index(字段名));
+                             例子create table db2.t2(name char(10),age int,class char(7),email char(30),index(name),index(age));
+      3.1.2.在已有的表里创建索引  格式create index 索引名 on 表名(字段名);  
+                                    例子create index name on db2.stuinfo(name);
+      3.1.3查看索引字段:  基本查看desc 表明;key列显示索引    详细查看索引:show index from 表名 \G竖着查看
+                           查看表结构desc db2.t2;          竖着查看show index from db2.t2 \G;     
+      3.1.4.删除索引:  格式drop index 索引名 on 库.表名   例子drop index age on db2.t2; 
+四、主    键:
+    什么是主键:不能赋空值,主键值不能允许重复,就是表里数据不能重复.
           建表时创建主键:         
                    create table t3(name char(10) primary key,age int);或
                    create table t4(name char(10),age int,primary key(name));
@@ -140,8 +139,8 @@ create table db2.t2 (name char(10) not null default "",age tinyint unsigned defa
 
 insert into db2.t6 values(null,"mm",20);
 
-外    键foreign key:
-什么是外键:向一个表插入记录时,字段值在另一个表字段值范围内选择.
+五、外    键foreign key:
+    什么是外键:向一个表插入记录时,字段值在另一个表字段值范围内选择.
       使用规则:
                表存储引擎必须是innodb
                字段类型要一致
@@ -171,12 +170,162 @@ insert into db2.t6 values(null,"mm",20);
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #######################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                         day3 Mys
-       
-       
-
-
-
+                                         day3 RDBMS1
+一、数据导入导出
+    1.1.数据导入与导出默认检索路径
+       1.1.1.查看
+              数据库下面查看
+              模糊查看:mysql> show variables like "%file%";
+              精确查看:mysql> show variables like "sevure_file_priv";
+              数据导入导出的目录,默认是空的:mysql> system ls /var/lib/mysql-files/
+       1.1.2.修改数据库导入导出默认位置的配置文件
+           #vim /etc/my.cnf
+                [mysqld]
+                secure_file_priv="/myload"
+                :wq
+           #mkdir /myload
+           #chown mysql /myload
+           #systemctl restart mysqld
+           #mysql -uroot -ptarena
+              精确查看此文件下的默认默认路径是否改变:mysql> show variables like "sevure_file_priv";
+    1.2.数据导入
+       1.2.1.什么是数据导入:
+             把系统文件内容存储到数据库服务器的表里
+       1.2.2.命令格式
+          mysql>load data infile "目录/文件名" into table 库.表 fields terminated by "符号" line terminated by "\n";
+       1.2.3.例子 把系统用户信息/etc/passwd存储到db3库下的user表里
+             导入步骤:
+             1、建库:mysql> create database db3;
+             2、建表:
+          mysql> create table db3.user(
+                  -> username char(50),
+                  -> password char(1),
+                  -> uid int,
+                  -> gid int,
+                  -> comment varchar(150),
+                  -> homedir char(50),
+                  -> shell char(50));
+              3、导入:把文件导入到数据库修改之后的默认路径/myload下  mysql> system cp /etc/passwd /myload
+              4、把数据导入到数据库表并查看表:
+             mysql> load data infile "/myload/passwd" into table db3.user fields terminated by ":" lines terminated by "\n";
+             mysql> select * from db3.user;  
+              5、扩展添加序列号,在表第一列插入一列表序列号:(可通过主键字段自加1实现)
+             mysql> alter table db3.user add id int primary key auto_increment first;      
+    1.3.数据导出
+       1.3.1.什么是数据导出?  
+             把记录保存到系统文件里
+       1.3.2.命令格式与例子
+       1.select 查询命令 into outfile "目录/文件名";
+           例子:mysql> select * from db3.user where id<=2 into outfile "/myload/user1.txt";
+       2.select 查询命令 into outfile "目录/文件名" fields terminated by "分隔符";例子如3
+         3.以":"为分隔符\n换行倒出:select 查询命令 into outfile "目录/文件名" fields terminated by "分隔符" lines terminated by "\n"; 
+           例子:mysql> select username,homedir,shell from db3.user where id<=2 into outfile "/myload/user5.txt" fields terminated by ":" lines terminated by "\n";
+                                                                ----------------
+                                                                 下午知识
+                                                                ----------------
+二、管理表记录 
+  2.1 添加记录 insert into(新添加的记录追加在记录末尾)
+      2.1.1 添加1条记录给所有列赋值
+         格式:insert into 表名 values (字段值列表);
+      2.1.2 添加多条记录给所有列赋值
+         格式:insert into 表名 values (字段值列表),(字段值列表),(字段值列表);
+         例子:mysql> insert into db3.user(username,id) values(null,1001),("null",1002),("",1003);
+      2.1.3 添加1条记录给指定的列赋值
+         格式:insert into 表名(字段名列表) values (字段值列表);
+         例子:insert into db3.user(username,password,uid,gid,comment,homedir,shell) values("yaya100","x","1000","1000","","/home/yaya100","/bin/nash");
+      2.1.4 添加多条记录给指定的列赋值
+         格式:insert into 表名(字段名列表) values (字段值列表) (字段值列表);
+  2.2 查询记录 select (字段是列,条件是行)
+       格式:select 字段名列表 from 表名 [where 条件];
+       例子:mysql> select username,uid from db3.user where id <= 10;
+  2.3 更新记录 update(修改;记录字段的值)
+       格式:update 库名.表名 set 字段名=值,字段名=值 [ where 条件 ];
+       例子:mysql> update db3.user set password="A",comment="root";
+  2.4 删除记录 delete (以行为单位删除)
+       格式:delete from 库.表 [ where 条件 ]
+       例子:mysql> delete from db3.user where username="yaya100";
+三、匹配条件[ where 条件 ] select、update、delete 记录 操作
+  3.1 基本匹配条件(适用于select、update、delete 记录 操作)
+        3.1.1 数值比较(必须是数值比较) =、>、>=(大于等于)、<、<=(小于等于)、!=(不等于) 
+         例如:select username,uid from db3.user where uid=gid;
+        3.1.2 字符比较字符且要双引号 =、!=
+         例如显示shell为/bin/bash的数据:select username from db3.user where shell = "/bin/bash";
+                                   select username from db3.user where shell != "/bin/bash";      
+        3.1.3 范围匹配(in 在..里..)(between 数字 and 数字 在...之间)(distinct 去重显示)
+         例如:mysql> select username from db3.user where username in ("sync","daemon","apache","mysql");
+           mysql> select username from db3.user where uid in (0,1,2);
+           mysql> select username from db3.user where uid between 10 and 20;
+           mysql> select distinct shell from db3.user;
+        3.1.4 匹配空及非空(is null空)(is not null非空)
+          例子查看名字为空和非空:mysql> select username from db3.user where username is null;
+                          mysql> select username from db3.user where username is not null;
+        3.1.5 逻辑匹配(or或)(and与)(!或not是非)
+           例如:mysql> select username,uid from db3.user where username="root" and uid=1;
+            mysql> select username,uid from db3.user where username="root" or uid=1;
+  3.2 高级匹配条件(适用于select、update、delete 记录 操作)
+       3.2.1 模糊查询 like
+             '_'表示一个字符like '____'显示4个字符的名字
+             '%'表示0~n个字符like '%a%';
+         例如:mysql> select username from db3.user where username like '___';
+           mysql> select username from db3.user where username like '%a%';
+           mysql> select username from db3.user where username like '__%__';
+       3.2.2 正则匹配 regexp  ^ $ . [] *
+            例如:mysql> select username from db3.user where username regexp '[at]';
+             mysql> select username from db3.user where username regexp '^[at]';
+             mysql> select username from db3.user where username regexp '[0-9]';
+            
+       3.2.3 四则运算 +-*/%
+             例如:mysql> update db3.user set uid=uid+1 where uid<=5;
+              mysql> select username,uid,gid,(uid+gid)/2 pjz from db3.user;
+              mysql> select username,uid from db3.user where uid%2=0;
+  3.3 操作查询结果(对查询后的数据做处理) 
+     3.3.1 聚集函数
+       avg(字段名) 统计字段平均值
+       sum 统计字段和
+       min 统计字段最小值
+       max 统计字段最大值
+       count 统计字段个数
+       例子:select min(uid) from db3.user;
+         mysql> select max(uid) from db3.user;
+         mysql> select sum(uid) from db3.user;
+         mysql> select count(uid) from db3.user;
+         mysql> select count(username) from db3.user where shell="/sbin/nologin";
+         mysql> select min(uid) from db3.user where uid >=10 and uid<=20;
+      3.3.2 查询结果排序
+           升序:mysql> select username,uid from db3.user where uid <=1000 order by uid asc;
+           降序:mysql> select username,uid from db3.user where uid <=1000 order by uid desc;
+      3.3.3 查询结果分组 group by 字段名;
+         mysql> select shell from db3.user where uid <=100 group by shell;
+            与去重显示执行结果一样但是过程不一样
+         mysql> select shell from db3.user where uid <=100 group by shell;
+      3.3.4 查询结果过滤 having 条件; 速度快
+         mysql> select username,uid from db3.user where username is not null having uid=3;
+            或mysql> select username,uid from db3.user where username is not null and uid=3;这个是两个条件一起查找,没有上面的条件查找快.
+      3.3.5 限制查询结果显示行数 limit
+            1 只显示查询结果的前几行  limit 2
+           mysql> select username,uid from db3.user where id <=10 limit 2;
+            2 只显示查询结果指定范围内的行 limit 2,3;  2是显示的起始行,3是显示总行数. 
+           mysql> select username,uid from db3.user where id <=10 limit 2,3;
+四、MySQL管理工具
+   4.1 连接mysql服务的方式
+      命令行、使用软件连接、连接脚本(php python java)
+   4.2 安装图形软件管理数据库服务器
+      50上安装phpMyAdmin包软件
+     # yum -y install httpd php php-mysql
+     # systemctl restart httpd 
+     # systemctl enable httpd
+     [student@room9pc01~]$ scp /linux-soft/03/mysql/phpMyAdmin-2.11.11-all-languages.tar.gz root@192.168.4.50:/root/
+     # tar -zxvf phpMyAdmin-2.11.11-all-languages.tar.gz 
+     # mv phpMyAdmin-2.11.11-all-languages /var/www/html/phpmyad
+     # cd /var/www/html/phpmyad/
+     # cp config.sample.inc.php config.inc.php
+     # vim +17 config.inc.php(或第31行)单引号随便写一点东西 
+     然后真机登录 firefox http://192.168.4.50/phpmyad
+      root/tarena
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                         day4 
 
 
 
