@@ -1,0 +1,184 @@
+#############################################################################################################################
+-----------------------------------------------------------------------------------------------------------------------------
+
+                                               day1
+day1 RDBMS1
+DB(DataBase)
+数据库
+DBMS()
+数据库管理系统
+DBS()
+数据库系统即DB+DBMS
+
+rm -f /etc/my.cinf
+rm -rf /var/lib/mysql/*
+rpm -e --nodeps mariadb-server mariadb.
+安装数据库:#yum -y install mysql-community-*.rpm
+数据库存储在:/var/lib/mysql
+查看进程:ps -C mysqld
+查看端口:3306
+错误日志文件:/var/log/mysqld.log
+查看数据库密码并访问数据库服务: 
+#grep password /var/log/mysqld.log
+#mysql -hlocalhost -uroot -p'*Bc1hFVWWhnK'
+修改数据库密码:
+mysql> alter    root@"localhost" identified by "123qqq...A";
+设置默认长度和密码长度
+mysql> show variables like "%password%";
+mysql>set global validate_password_policy=0; 
+mysql>set global validate_password_length=6；
+修改数据库密码为:
+mysql> alter root@"localhost" identified by "tarena";
+库管理命令:
+      show databases;         显示库
+      select user();          显示连接用户 
+      use 库名;                     切换库
+      select database();      显示当前所在的库
+      create database 库名;      创建库
+      show tables;            显示表
+      drop database 库名;        删除库
+创建库:
+create database db1;
+创建表:
+create table 库名.表名(
+   字段1 类型(宽度),
+   字段2 类型(宽度),
+)s;指定字符集
+创建支持中文的表:create table 学生表2(姓名 char(10),年龄 int)DEFAULT CHARSET=utf8;
+插入表数据:insert into 学生表2 values ("张三",88),("李四",70),("张翠山",30);
+数据类型包括:
+字符类型(char固定长度,最大存255个字符;varchar变长字符,65535个;大文本text/blob,图片/音频或视频)
+数值类型(
+整型正负 微小整型tinyint -128~127 小整形 smallint;
+浮点型 单精度float 双精度double)
+小数点整数5位,小数:create table t5 (name char(5),gz float(7,2));insert into t5 values("bob",99999.99);
+日期时间型(日期时间datetime)
+mysql> create table t7 (name char(5),your_start year,up_time time,birthday date,party datetime);
+mysql> insert into t7 values ("bob",1990,083000,20191120,20190707213045);
+mysql> insert into t7 values ("jerry",year(20190803),curtime(),curdate(),now());
+mysql> insert into t7 values ("jerry",year(20190803),curtime(),curdate(),now());
+枚举类型
+enum 单选 只能选一个
+set  多选 可以选多个
+create table t10 (name char(10),sex enum("boy","girl","no"),likes set("eat","drink","game","happy"));
+insert into t10 values ("bob","boy","eat,game");
+select * from t10;
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#######################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                         day2 Mysql的键值  
+约束条件:
+         null 允许为空
+         not null 不允许为null
+         key 键值类型
+         default 设置默认值
+         extra 额外设置
+create table db2.t2 (name char(10) not null default "",age tinyint unsigned default 19,sex enum("m","w") not null default "m");
+
+一些基本语法结构:
+                 add 添加字段
+                 modify 修改字段类型
+                 change 修改字段名
+                 drop 删除字段
+                 rename 修改表名
+
+修改表结构:
+   命令 alter table 库名.表名 执行动作;
+   执行动作:
+           添加新字段 add:
+              末尾         add 字段名 类型
+               alter table db2.t1 add email varchar(50);
+              某字段列尾   add 字段名 类型 [约束条件] after 字段名;
+               alter table db2.t1 add likes set("eat","drink","game","happy") not null default "eat,drink" after age;
+              某字段列首   add 字段名 类型 [约束条件] first
+              alter table db2.t1 add class char(7) default "nsd1905" first;
+           修改字段类型 modify:
+               修改字段位置:alter table db2.t1 modify age tinyint unsigned default 19 after class;
+               修改字段类型:alter table db2.t1 modify name varchar(15) not null default "";
+           修改字段名change:
+            alter table db2.t1 change email mail varchar(40);
+           删除表字段drop:
+            alter table db2.t1 drop mail;
+           修改表名rename:
+            alter table db2.t1 rename db2.stuinfo;
+                                                 下午知识
+什么是索引:类似与书的目录,对表中的字段排序.索引占表物理空间,降低了数据的维护速度.好处是加快数据的查询速度.
+普通索引:使用规则
+         建表时创建索引           create table 库.表(字段列表,index(字段名),index(字段名));
+                           create table db2.t2(name char(10),age int,class char(7),email char(30),index(name),index(age));
+         在已有的表里创建索引    create index 索引名 on 表名(字段名);  
+                           create index name on db2.stuinfo(name);
+         查看索引字段:            基本查看desc 表明;key列显示索引          详细查看索引:show index from 表名 \G竖着查看
+                           desc db2.t2;                                  show index from db2.t2 \G;     
+         删除索引:                drop index 索引名 on 库.表名   drop index age on db2.t2; 
+主    键:
+什么是主键:不能赋空值,主键值不能允许重复,就是表里数据不能重复.
+          建表时创建主键:         
+                   create table t3(name char(10) primary key,age int);或
+                   create table t4(name char(10),age int,primary key(name));
+                   insert into t4 values("",19)
+                        insert into t3 values ()
+         在已有表里创建主键:alter table 表名 add primary key(字段名);
+                   alter table db2.stuinfo add primary key(name);
+         创建复合主键多列一起做主键,是且关系,多列不能同时重复:create table db2.t5(class char(7),name char(10),money enum("no","yes"),primary key(class,name));
+                   insert into db2.t5 values("nsd1905","bob","yes");
+                         删除主键:alter table db2.t5 drop primary key;
+            删除一个表数据,然后新增字段,添加复合主键:
+                    alter table db2.t5 add stu_num char(9) first;
+                    delete from db2.t5;
+                    select * from db2.t5;
+                    show tables;
+                    desc db2.t5;
+                    alter table db2.t5 add prinary key(stu_num,class,name);
+            主键与auto_increment(自增长)连用:字符必须是数值且是主键里的字段自加1.
+                    create table db2.t6(stu_num int primary key auto_increment,name char(10),age int); 
+                    desc db2.t6;     
+             添加主键字段自加1:
+             alter table db2.stuinfo add id int primary key auto_increment first; 
+             添加表数据:insert into stuinfo(class,age,name,likes,sex) values("nsd1906",19,"bob","eat,drink","m");                   
+
+insert into db2.t6 values(null,"mm",20);
+
+外    键foreign key:
+什么是外键:向一个表插入记录时,字段值在另一个表字段值范围内选择.
+      使用规则:
+               表存储引擎必须是innodb
+               字段类型要一致
+               被参照字段必须要是索引类型的一种(primary key)
+      建表时创建外键:create table 库.表 (字段列表,foreign key(字段名) references 库,表(字段名) on update cascade on delete cascade)engine=innodb;
+      创建一个员工参照表并添加员工:
+      create table db2.ygb(yg_id int primary key auto_increment,name char(20),sex enum("boy","girl"))engine=innodb;
+      insert into db2.ygb(name,sex) values("bob","boy");
+      insert into db2.ygb(name,sex) values("lucy","girl");
+      select * from db2.ygb
+      创建参照的工资表:
+        create table gzb(gz_id int, pay float(7,2), foreign key(gz_id) references ygb(yg_id) on update cascade on delete cascade)engine=innodb;
+      查看创建工资表的命令:show create table gzb;
+      工资表添加工资:insert into gzb values(1,10000);
+                 insert into gzb values(2,20000);
+      同步更新表id为8:update ygb set yg_id=8 where yg_id=2;
+                  select * from ygb;
+                  select * from gzb;
+      同步删除id为8:delete from ygb where yg_id=8;
+                select * from ygb;
+                select * from gzb;
+      设置主键:alter table gzb add primary key(gz_id);
+      删除外键:
+               show create table gzb;                    查看此处gzb_ibfk_1有个外键标识
+               alter table gzb drop foreign key gzb_ibfk_1;
+               show create table gzb;                    在查看外键标识就没有了
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#######################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                         day3 Mys
+       
+       
+
+
+
+
+
+
+
+
