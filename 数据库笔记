@@ -234,12 +234,12 @@ select * from t10;
          格式:insert into 表名 values (字段值列表);
       2.1.2 添加多条记录给所有列赋值
          格式:insert into 表名 values (字段值列表),(字段值列表),(字段值列表);
-         例子:mysql> insert into db3.user(username,id) values(null,1001),("null",1002),("",1003);
       2.1.3 添加1条记录给指定的列赋值
          格式:insert into 表名(字段名列表) values (字段值列表);
          例子:insert into db3.user(username,password,uid,gid,comment,homedir,shell) values("yaya100","x","1000","1000","","/home/yaya100","/bin/nash");
       2.1.4 添加多条记录给指定的列赋值
          格式:insert into 表名(字段名列表) values (字段值列表) (字段值列表);
+         例子:mysql> insert into db3.user(username,id) values(null,1001),("null",1002),("",1003);
   2.2 查询记录 select (字段是列,条件是行)
        格式:select 字段名列表 from 表名 [where 条件];
        例子:mysql> select username,uid from db3.user where id <= 10;
