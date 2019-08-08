@@ -40,8 +40,11 @@ mysql> alter user root@"localhost" identified by "tarena";
       create database 库名;      创建库
       show tables;            显示表
       drop database 库名;        删除库
-创建库:
-create database db1;
+创建库:库名 命名规则
+   仅可以使用数字 字母 下划线 不能纯数字
+   区分字母大小写 具有唯一性
+   不可使用指令关键字 特殊字符
+   例如:create database db1;
 创建表:
 create table 库名.表名(
    字段1 类型(宽度),
@@ -104,11 +107,9 @@ select * from t10;
             alter table db2.t1 drop mail;
       2.1.5.修改表名rename:
             alter table db2.t1 rename db2.stuinfo;
-                                                 ------------
-                                                 下午知识
-                                                 ------------
+
 三、什么是索引:类似与书的目录,对表中的字段排序.索引占表物理空间,降低了数据的维护速度.好处是加快数据的查询速度.
-    3.1.普通索引:使用规则
+    3.1.普通索引:使用规则(显示MUL)
       3.1.1.建表时创建索引  格式create table 库.表(字段列表,index(字段名),index(字段名));
                              例子create table db2.t2(name char(10),age int,class char(7),email char(30),index(name),index(age));
       3.1.2.在已有的表里创建索引  格式create index 索引名 on 表名(字段名);  
@@ -225,9 +226,7 @@ select * from t10;
        2.select 查询命令 into outfile "目录/文件名" fields terminated by "分隔符";例子如3
          3.以":"为分隔符\n换行倒出:select 查询命令 into outfile "目录/文件名" fields terminated by "分隔符" lines terminated by "\n"; 
            例子:mysql> select username,homedir,shell from db3.user where id<=2 into outfile "/myload/user5.txt" fields terminated by ":" lines terminated by "\n";
-                                                                ----------------
-                                                                 下午知识
-                                                                ----------------
+                                                               
 二、管理表记录 
   2.1 添加记录 insert into(新添加的记录追加在记录末尾)
       2.1.1 添加1条记录给所有列赋值
@@ -330,7 +329,165 @@ select * from t10;
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                  day4 
+                                                  day4 授权和备份
+一、用户授权
+    1.1 什么是用户授权
+        在数据库服务器上添加新的连接用户,在添加用户时可以设置访问权限及连接密码.默认数据库管理员root用户本机登陆有授权权限.
+    1.2 命令格式
+      grant 授权列表 on 库名 to 用户名@"客户端地址" identifited by "密码";
+        权限列表:all、usage、select update insert、select update(字段1...字段N)
+        库名:*.*(所有库所有表) 库名.*(一个库) 库名.表名(一张表)
+        用户名:授权时自定义要有标识性,存储在mysql库的user表里
+        客户端地址:%、192.168.4.%、192.168.4.1、localhost
+    1.3 授权例子:服务端:grant all on *.* to mydba@"%" identified by "123qqq...A" with grant option;
+                 客户端:mysql -h192.168.4.50 -umydba -p"123qqq...A" 
+                 (扩展:information_schema是虚拟库只有看权限,内存库映射出来的虚拟库.)
+    1.4 相关命令
+              select user();                             显示当前登陆的用户名及客户端地址
+              show grants;                               登录用户显示自身访问权限
+              show grants for 用户名@"客户端地址";             显示管理员已授权的用户权限
+                  例子:mysql> show grants for yaya@"localhost";
+              set password=password("密码");              授权用户连接后修改连接密码
+                  例子:mysql> set password=password("tarena");
+              set password for 用户名@"客户端地址"=password(密码); 管理员重置授权用户连接密码
+                  例子:mysql> set password for mydba@"%"=password("123qqq...A");
+              drop user 用户名@"客户端地址"                      删除授权用户(必须有管理员权限)
+                  例子:mysql> drop user yaya@"localhost";
+    1.5 授权库mysql(记录授权信息mysql库的管理)可以查看表记录,查看到授权用户的授权信息,也可以通过修改记录,修改用户的权限
+      1.5.1 user表(记录已有的授权用户及权限)
+             查看:mysql> desc mysql.user;
+              mysql> select host,user from user;
+              mysql> select * from  user where host="%" and user="mydba" \G;
+             修改库权限:mysql> update mysql.db set  Update_priv="N",Delete_priv="N" where host="localhost" and db="db3" and user="admin2";
+             刷新生效:mysql> flush privileges;
+             查看授权:mysql> show grants for admin2@"localhost";
+      1.5.2 db表   (记录已有授权用户对数据库的访问权限)
+             查看:mysql> desc mysql.db;
+              mysql> select host,db,user from db;
+              mysql> select * from mysql.db where host="localhost" and db="db3" and user="admin2" \G;
+             修改权限:同上 1.5.1
+      1.5.3 tables_priv表(记录已有授权用户对表的访问权限)
+             查看:mysql> desc tables_priv;
+              mysql> select * from mysql.tables_priv;
+              mysql> select * from mysql.tables_priv where db="db3" and table_name="user"\G;
+              mysql> show grants for admin@"192.168.4.0/24";
+             修改表权限:  
+      1.5.4 columns_priv表(记录已有授权用户对字段的访问权限)
+            添加一个用户对字段有权限:mysql> grant select,update(uid) on db3.user to yaya99@"%" identified by "123456";
+             查看:mysql> desc mysql.columns_priv;
+              mysql> select * from mysql.columns_priv;
+
+    1.6 撤销授权 (删除已有授权用户的权限)撤销with grant option授权的权限以及其他权限
+        格式:revoke 权限列表 on 库名.表 from 用户名@"客户地址";
+        例子:mysql> select host,user from mysql.user;   
+          mysql> show grants for mydba@"%";
+          mysql> revoke grant option on *.* from mydba@"%";   删除在此用户下授权功能
+          mysql> show grants for mydba@"%";
+
+          mysql> revoke delete on *.* from mydba@"%";         删除授权过的删除权限
+          mysql> show grants for mydba@"%";
+
+          mysql> revoke all on *.* from mydba@"%";            删除授权的所有权限
+          mysql> show grants for mydba@"%";
+    1.7 删除授权用户
+          mysql> drop user mydba@"%";
+          mysql> select host,user from mysql.user;
+    1.8 管理root密码
+        1.8.1 恢复密码
+        #systemctl stop mysqld
+        vim /etc/my.cnf
+          [mysqld]
+             skip-grant-tables
+             #validate_password_policy=0
+             #validate_password_length=6
+        #systemctl start mysqld              跳过密码启动服务程序
+        #mysql
+        mysql> desc mysql.user;
+        mysql> select host,user,authentication_string from mysql.user;
+        mysql> update mysql.user set authentication_string=password("A...qqq321") where host="localhost" and user="root";   修改密码
+        mysql> flush privileges; 
+        #mysql -hlocalhost -uroot -pA...qqq321
+        1.8.2 修改密码(重置密码)
+            #mysqladmin -hlocalhost -uroot -p password "123456"
+               #旧密码
+二、完全备份
+    2.1 数据备份目的  数据丢失或损坏,可以使用
+    2.2 数据备份方式
+           物理备份冷备50
+         #cp -r /var/lib/mysql /root/mysql.bak
+         #tar -zcvf /root/mysql.tar.gz /var/lib/mysql
+         #scp -r /root/mysql.bak root@192.168.4.51:/opt/
+           物理恢复51
+         #ss -anptu | grep 3306
+         #systemctl stop mysqld
+         #ss -anptu | grep 3306
+         #rm -rf /var/lib/mysql
+         #cp -r /root/mysql.bak/ /var/lib/mysql
+         #chown -R mysql:mysql /var/lib/mysql
+         #systemctl start mysqld
+           
+        逻辑备份  使用软件自带备份程序(备份命令)对数据做备份,在执行备份命令时,会根据已有的数据生成对应的命令,把命令存放到指定的备份文件里.
+                  恢复时,执行备份文件里的命令恢复数据
+                    
+    2.3 数据备份策略
+        完全备份:备份所有数据(可以是1张表、1个库、1台服务器)
+        增量备份:只备份新产生数据,备份上次备份后,所有新产生的数据
+        差异备份:只备份新产生数据,备份完全备份后,所有新产生的数据
+       
+    2.4 完全备份-----mysqldump命令
+        --all-databases 或 -A     所有库
+          数据库名                        单个库  db3
+          数据库名 表名                   单张表  db3 user
+        -B 库名 库名                   多个库  -B db1 db2 db3 
+        格式:#mysqldump -uroot -p密码 库名 > 目录/xxx.sql
+        例子:#mysqldump -uroot -ptarena --all-databases > /mybak/alldb.sql
+          #mysqldump -uroot -ptarena db1 > /mybak/db1.sql
+          #mysqldump -uroot -ptarena db3 user > /mybak/db3_user.sql
+          #mysqldump -uroot -ptarena -B db1 db3 > /mybak/twodb.sql
+    2.5 完全恢复-----mysql命令
+        格式:#mysql -uroot -p密码 库名 < 目录/xxx.sql
+        例子:#scp /mybak/db1.sql root@192.168.4.51:/root/
+          #mysql -uroot -ptarena db1 < /root/db1.sql     注意:导入一个库或者一个表需要先创建这个库
+
+          #mysql -uroot -ptarena < /root/twodb.sql           导入多个库和all不需要先创建库
+三、增量备份  备份上次备份后,所有新产生的数据(使用mysql服务的binlog日志实现数据的增量备份与恢复)
+   3.1 binlog日志的使用
+        3.1.1 什么是binlog日志
+             也称做二进制日志
+          MySQL服务日志文件的一种
+             记录除查询之外的所有SQL命令
+             可用于数据备份和恢复
+             配置mysql主从同步的必要条件  
+         3.1.2 启用日志
+           3.1.2.1 默认路径
+           #vim /etc/my.cnf
+               [mysql]
+               server_id=50
+               log_bin
+           #systemctl restart mysqld 
+              查看mysql>show master status       
+             日志文件存放在#ls /varlib/mysql/host50* (/var/lib/mysql/host50-bin.000001  /var/lib/mysql/host50-bin.index 是索引存放日志的名称)
+           3.1.2.2 自定义日志存储目录和日志文件名
+           #mkdir /mylog           #创建自定义路径
+           #chown mysql /mylog     #给权限
+           #vim /etc/my.cnf
+               [mysql]
+               server_id=50
+               log_bin=/mylog/lh     #自定义路径
+           #systemctl restart mysqld
+           #ls /mylog
+              查看mysql>show master status                
+         3.1.3 手动创建新的binlog日志文件
+               #systemctl restart mysql
+               mysql>flush logs
+               或者#mysql -uroot -ptarena -e "flush logs"
+               #mysqldump --flush-logs  做完备份之后在刷新一下生成的binlog日志文件
+                   查看mysql>show master status
+         3.1.4 删除已有的binlog日志
+         3.1.5 查看binlog日志内容
+              3.1.5.1 查看binlog日志内容
+              3.1.5.2 日志文件如何区分记录的多条sql命令
+    3.2 使用binlog日志恢复数据
 
 
 
