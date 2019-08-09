@@ -358,13 +358,13 @@ select * from t10;
              查看:mysql> desc mysql.user;
               mysql> select host,user from user;
               mysql> select * from  user where host="%" and user="mydba" \G;
-             修改库权限:mysql> update mysql.db set  Update_priv="N",Delete_priv="N" where host="localhost" and db="db3" and user="admin2";
-             刷新生效:mysql> flush privileges;
-             查看授权:mysql> show grants for admin2@"localhost";
       1.5.2 db表   (记录已有授权用户对数据库的访问权限)
              查看:mysql> desc mysql.db;
               mysql> select host,db,user from db;
               mysql> select * from mysql.db where host="localhost" and db="db3" and user="admin2" \G;
+                  修改库权限:mysql> update mysql.db set  Update_priv="N",Delete_priv="N" where host="localhost" and db="db3" and user="admin2";
+                  刷新生效:mysql> flush privileges;
+                  查看授权:mysql> show grants for admin2@"localhost";
              修改权限:同上 1.5.1
       1.5.3 tables_priv表(记录已有授权用户对表的访问权限)
              查看:mysql> desc tables_priv;
@@ -406,7 +406,15 @@ select * from t10;
         mysql> select host,user,authentication_string from mysql.user;
         mysql> update mysql.user set authentication_string=password("A...qqq321") where host="localhost" and user="root";   修改密码
         mysql> flush privileges; 
+        #systemctl stop mysqld
+        vim /etc/my.cnf
+          [mysqld]
+             #skip-grant-tables
+             validate_password_policy=0
+             validate_password_length=6
+        #systemctl start mysqld 
         #mysql -hlocalhost -uroot -pA...qqq321
+          然后重启在恢复.
         1.8.2 修改密码(重置密码)
             #mysqladmin -hlocalhost -uroot -p password "123456"
                #旧密码
@@ -484,10 +492,159 @@ select * from t10;
                #mysqldump --flush-logs  做完备份之后在刷新一下生成的binlog日志文件
                    查看mysql>show master status
          3.1.4 删除已有的binlog日志
-         3.1.5 查看binlog日志内容
-              3.1.5.1 查看binlog日志内容
-              3.1.5.2 日志文件如何区分记录的多条sql命令
-    3.2 使用binlog日志恢复数据
+                删除4之前的binlog日志文件
+                mysql> purge master logs to "lh.000004";
+                删除所有binlog日志内容
+               mysql> reset master;
+         3.1.5 查看binlog日志内容   偏移量记录日志文件
+            3.1.5.1 查看binlog日志内容 命令行查看
+                #mysqlbinlog /mylog/lh.000001
+                mysql> show master status;
+            3.1.5.2 修改日志格式
+                host50# scp /mylog/lh.000001 root@192.168.4.51:/root/
+                   恢复数据:host51# mysql -uroot -ptarena -e "select count(*) from db3.user"
+                            #mysqlbinlog /root/lh.000001 | mysql -uroot -ptarena 
+                            #mysql -uroot -ptarena -e "select count(*) from db3.user"
+                    修改日志记录格式:
+                          三种记录方式
+                           statement 报表模式
+                           row 行模式
+                           mixed 混合模式
+                     #mysql -uroot -ptarena -e "show variables like 'binlog_format'"
+                           
+                           
+            3.1.5.3 日志文件如何区分记录的多条sql命令
+                       偏移量和时间点
+                       命令格式:
+                          偏移量
+                           --start-position=1054 --stop-position=2098
+                          时间点
+                           --start-datetime="yyyy-mm-dd hh:mm:ss" --stop-datetime="yyyy-mm-dd hh:mm:ss"
+    3.2 使用binlog日志恢复指定范围内的数据
+        mysql> insert into db3.user(username) values("aliceA");
+        mysql> insert into db3.user(username) values("aliceB");
+        mysql> delete from db3.user where username like 'alice%';
+        mysql> show master status;
+        mysql> exit
+        #mysqlbinlog /mylog/lh.000001 | grep -i delete
+          
+        host50# scp /mylog/lh.000001 root@192.168.4.51:/opt/
+       
+        host51#mysqlbinlog /opt/lh.000001
+        host51#mysql -uroot -ptarena -e "select username from db3.user where username like 'alice%'"
+        host51#mysqlbinlog --start-position=325 --stop-position=790 /opt/lh.000001 | mysql -uroot -ptarena
+        host51#mysql -uroot -ptarena -e "select username from db3.user where username like 'alice%'"    
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                  day5 percona软件和innobackupex备份与恢复
+以上学习备份的缺点:
+物理备份:
+         跨平台性差
+         备份时间长、冗余备份、浪费存储空间
+mysqldump备份缺点:
+         效率较低、备份和还原速度慢、锁表
+                  
+
+1、percona软件介绍
+  1.1 percona软件介绍
+   1.2 安装软件
+        安装两个包:
+        #rpm -ivh libev-4.15-1.el6.rf.x86_64.rpm
+        #yum -y install percona-xtrabackup-24-2.4.7-1.el7.x86_64.rpm 
+   1.3 命令格式   完全备份和完全恢复
+      --host    --user  --port  --password  --databases  --no-timestamp
+      --redo-only --apply-log --copy-back                        完全备份 
+      --incremental 目录名  --incremental-basedir=目录名 --incremental-dir=目录名  --export import  增量备份
+     #innobackupex [选项] 
+      完全备份格式:innobackupex --user 用户名 --passwoed 密码 备份目录名 --no-timestamp
+               #innobackupex --user root --password tarena /allbak --no-timestamp
+               #scp -r /allbak/ root@192.168.4.51:/root/
+      完全恢复格式:  --aapply-log 目录名   准备恢复数据
+                 --copy-back 目录名   恢复数据
+      
+      例子步骤如下:
+         完全备份:
+       host50#innobackupex --user root --password tarena /allbak --no-timestamp
+       host50#scp -r /allbak/ root@192.168.4.51:/root/
+         完全恢复:
+            1 停止数据库服务器
+            2 清空数据库目录
+            3 准备恢复数据
+            4 拷贝数据
+            5 修改数据库目录的所有者和组用户为mysql
+            6 启动服务
+            7 管理员登录查看数据
+      100   systemctl stop mysqld
+      101  cd /var/lib/mysql
+      102  ls
+      103  rm -rf *
+      104  ls
+      105  innobackupex --apply-log /root/allbak/       准备恢复数据                
+      106  innobackupex --copy-back /root/allbak/       开始恢复数据
+      107  ls -ld /var/lib/mysql
+      108  ls -l /var/lib/mysql
+      109  chown -R mysql:mysql /var/lib/mysql          给所有者和组为mysql
+      110  ls -l /var/lib/mysql
+      113  systemctl start mysqld
+      114  ss -anptu | grep 3306
+        查看存储引擎mysql> show engines;
+    
+    1.4 恢复单张表 (.frm 存储表结构    .ibd 存储表数据表空间文件)
+        具体操作如下:
+                   1 删除表空间      alter table 库名.表名 discard tablespace
+                   2 导出表信息      innobackupex --apply-log --export 数据完全备份目录
+                   3 拷贝表信息文件到数据库目录下  
+                   4 修改表信息文件的所有者及组用户为mysql
+                   5 导入表空间
+                   6 删除数据库目录下的表信息文件
+                   7 查看表记录
+          1 mysql> alter table db5.b discard tablespace;
+          2 #innobackupex --apply-log --export /root/allbak/
+          3 #cp /root/allbak/db5/b.{cfg,exp,ibd} /var/lib/mysql/db5/
+          4 #chown -R mysql:mysql /var/lib/mysql/db5/b.*
+          5 mysql> alter table db5.b import tablespace;
+            mysql> select * from db5.b;
+          6 #rm -rf /var/lib/mysql/db5/b.cfg
+            #rm -rf /var/lib/mysql/db5/b.exp 
+          7 mysql> select * from db5.b;
+    
+    1.5 innobackupex增量备份与恢复
+          首次备份:做完全备份
+        #cat /allbak/xtrabackup_checkpoints
+         
+           增量备份格式:#innobackupex --user 用户名 --password 密码 --incremental 增量目录 --incremental-basedir=目录名 --no-timestamp
+           增量恢复格式:#innobackupex --apply-log --redo-only 目录名 --incremental-dir=增量目录
+                   #innobackupex --copy-back 目录名
+         
+          例子:增量备份
+           host50#innobackupex --user root --password tarena /allbak --no-timestamp
+           host50#innobackupex --user root --password tarena --incremental /new1dir --incremental-basedir=/allbak --no-timestamp
+           host50#innobackupex --user root --password tarena --incremental /new2dir --incremental-basedir=/new1dir --no-timestamp
+              
+           host50#scp -r /allbak/ root@192.168.4.51:/opt
+           host50#scp -r /new1dir/ root@192.168.4.51:/opt
+           host50#scp -r /new2dir/ root@192.168.4.51:/opt
+               
+              增量恢复
+           host51#innobackupex --apply-log --redo-only /opt/allbak/                                 准备恢复数据合并数据
+           host51#innobackupex --apply-log --redo-only /opt/allbak/ --incremental-dir=/opt/new1dir  与new1合并,增量数据也会合allbak上
+           host51#innobackupex --apply-log --redo-only /opt/allbak/ --incremental-dir=/opt/new2dir  与new2合并,增量数据也会合allbak上      
+           host51#systemctl stop mysqld
+           host51#rm -rf /var/lib/mysql/*
+           host51#innobackupex --copy-back /opt/allbak/           
+           host51#chown -R mysql:mysql /var/lib/mysql/
+           host51#systemctl start mysqld
+           host51#ss -anptu | grep 3306
+      验证    host51#mysql -uroot -ptarena
+      查库    mysql> show databases; 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                  day5 主从同步   ftp://172.40.50.117/2019/homework/
+ 
+
 
 
 
