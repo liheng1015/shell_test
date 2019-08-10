@@ -642,8 +642,86 @@ mysqldump备份缺点:
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                  day5 主从同步   ftp://172.40.50.117/2019/homework/
+                                                 day6 主从同步   ftp://172.40.50.117/2019/homework/
  
+一、mysql主从同步
+    1.1 主从同步介绍
+    1.2 主从同步原理
+       Master
+             启用binlog日志
+       Slave
+            -Slave_IO:复制master主机binlog日志文件里的SQL命令到本机的relay-log文件里
+            -Slave_SQL:执行本机relay-log文件里的SQL语句,实现与Master数据一致 
+
+      存放数据库目录下的文件:
+            master.info             主库信息
+            relay-log.info          中继日志信息
+               主机名-relay-bin.000001   中继日志
+               主机名-relay-bin.index    索引文件
+    1.3 配置主从服务器
+       配置主服务器:
+           1 启用binlog日志
+           2 授权用户
+           3 查看binlog日志信息
+       配置从服务器:
+           1 设置server_id
+           2 确保与主服务器数据一致
+           3 指定主库信息
+           4 启动slave程序
+           5 查看状态
+       配置:
+       主:
+      1 vim /etc/my.cnf
+       [mysqld]
+         server_id=51
+         log-bin=master51
+        #systemctl restart mysqld
+        #ls /var/lib/mysql/master51.*
+        #mysql -uroot -p123456
+         > show master status;       查看binlog日志内容
+       2 > grant replication slave on *.* to repluser@"%" identified by "123qqq...A";
+       3 > show grants for repluser@"%";     
+       从:
+     host51#systemctl restart mysqld
+     host51#mysqldump -uroot -p123456 --master-data db5 > /root/db5.sql
+     host51#scp /root/db5.sql root@192.168.4.52:/opt/
+     host52#vim /etc/my.cnf
+           [mysqld]
+           server_id=52
+     host52#mysql -uroot -p123456 db5 < /opt/db5.sql
+     host52#mysql -uroot -p123456 db5 -e "use db5;show tables" 
+     host52#grep master51 /opt/db5.sql
+     host52#mysql -uroot -p123456
+            mysql> show slave status  \G;
+            mysql> change master to master_host="192.168.4.51",master_user="repluser",
+                   master_password="123qqq...A",master_log_file="master51.000002",master_log_pos=154;
+            mysql> start slave;
+            mysql> show slave status  \G;
+                   Slave_IO_Running: Yes        
+                   Slave_SQL_Running: Yes
+
+    
+     4 排错 
+     1 mysql> stop slave;
+       mysql> change master to [选项]=值 
+       mysql> start slave;
+     2 host52#cat /var/lib/mysql/master.info 主库信息,查看从服务器配置的change master to 命令的参数
+       mysql> stop slave;
+       mysql> change master to [选项]=值 
+       mysql> start slave;
+     3 relay-log.info 中继日志信息
+       mysql> stop slave;
+       #rm -rf master.info relay-log.info host52-relay*
+      4 vim /var/lib/mysql/auto.cnf   更改UUID 是克隆出来的
+     Last_IO_Error:Got fatal error 1236 from master when reading data from binary log: 'Could not find first log file name in binary log index file'
+     
+     
+      5 主从从
+      6 主主
+           
+
+二、复制模式
+    主从同步模式
 
 
 
