@@ -15,6 +15,7 @@ rpm -e --nodeps mariadb-server mariadb.
           systemctl start mysqld
           systemctl enable mysqld
 数据库存储在:/var/lib/mysql
+数据库配置文件:/etc/my.cinf
 查看进程:ps -C mysqld
 查看端口:3306
 错误日志文件:/var/log/mysqld.log
@@ -30,6 +31,10 @@ mysql> alter user root@"localhost" identified by "123qqq...A";
 mysql> show variables like "%password%";
 mysql>set global validate_password_policy=0; 
 mysql>set global validate_password_length=6；
+永久配置
+[mysqld]
+validate_password_policy=0
+validate_password_length=6
 修改数据库密码为:
 mysql> alter user root@"localhost" identified by "tarena";
 库管理命令:
@@ -58,7 +63,7 @@ create table 库名.表名(
 整型正负 微小整型tinyint -128~127 小整形 smallint;
 浮点型 单精度float 双精度double)
 小数点整数5位,小数:create table t5 (name char(5),gz float(7,2));insert into t5 values("bob",99999.99);
-日期时间型(日期时间datetime)
+日期时间型(日期时间datetime)datetime  timestamp  time  year  date
 mysql> create table t7 (name char(5),your_start year,up_time time,birthday date,party datetime);
 mysql> insert into t7 values ("bob",1990,083000,20191120,20190707213045);
 mysql> insert into t7 values ("jerry",year(20190803),curtime(),curdate(),now());
@@ -80,6 +85,14 @@ select * from t10;
          key 键值类型
          default 设置默认值
          extra 额外设置
+    键值类型:
+         index  普通索引
+         unique 唯一索引
+         fulltext 全文索引
+         primary key 主键
+         oreign 外键
+    索引类型:Btree、B+tree、hash
+
    例子:create table db2.t2 (name char(10) not null default "",age tinyint unsigned default 19,sex enum("m","w") not null default "m");
 二、表字段处理的一些基本语法结构:
                  add 添加字段
@@ -108,7 +121,7 @@ select * from t10;
       2.1.5.修改表名rename:
             alter table db2.t1 rename db2.stuinfo;
 
-三、什么是索引:类似与书的目录,对表中的字段排序.索引占表物理空间,降低了数据的维护速度.好处是加快数据的查询速度.
+三、什么是索引:类似与书的目录,对表中的字段排序.索引占表物理空间,降低了数据的维护速度.好处是加快数据的查询速度.属于键值
     3.1.普通索引:使用规则(显示MUL)
       3.1.1.建表时创建索引  格式create table 库.表(字段列表,index(字段名),index(字段名));
                              例子create table db2.t2(name char(10),age int,class char(7),email char(30),index(name),index(age));
@@ -642,7 +655,7 @@ mysqldump备份缺点:
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                 day6 主从同步   ftp://172.40.50.117/2019/homework/
+                                                  day6 主从同步   ftp://172.40.50.117/2019/homework/
  
 一、mysql主从同步
     1.1 主从同步介绍
@@ -721,7 +734,200 @@ mysqldump备份缺点:
            
 
 二、复制模式
-    主从同步模式
+    主从同步模式类型:
+                      异步复制模式(默认)
+
+                      全同步复制模式
+                      半同步复制模式
+                      介于异步复制和全同步复制之间
+                                  查看主从状态:#mysql -uroot -p123456 -e "show slave status\G" | grep -i yes
+                             命令:
+                           mysql> show variables like "have_dynamic_loading";
+                           mysql> install plugin rpl_semi_sync_master SONAME "semisync_master.so";    主服务器上加载模块
+                           mysql> install plugin rpl_semi_sync_slave SONAME "semisync_slave.so";      从服务器上加载模块
+                           mysql> select plugin_name,plugin_status from information_schema.plugins where plugin_name like "%semi%";
+
+                           mysql> set global rpl_semi_sync_master_enabled=1; 主服务器启动半同步复制
+                           mysql> set global rpl_semi_sync_slave_enabled=1;  从服务器启动半同步复制
+                           mysql> show variables like "rpl_semi_sync_%_enabled";
+                       host56即做主又做从
+                              配置文件用就生效:
+                       #vim /etc/my.cnf            
+                        [mysqld]
+                           plugin-load="rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so"
+                           rpl_semi_sync_master_enabled=1
+                           rpl_semi_sync_slave_enabled=1
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                  day7 数据读写分离和MySQL多实例
+一、数据读写分离
+     1.1 什么是数据读写分离
+          把客户端访问数据的读请求(select)和写请求(insert、update、delete)分别分配给不同的数据库服务器处理
+     1.2 如何实现客户端访问数据的读写分离
+             1 通过程序实现(代码里实现)
+             2 配置服务实现(在服务器上安装软件:mysql-proxy、mycat、maxscale 实现读写分离)
+                 中间件:mysql-proxy、 mycat、 maxscale
+             3 为什么要配置读写分离(51、52主从关系,实现分流减轻51主服务器的压力) 
+      1.3 配置数据读写分离
+          1 配置mysql 主从同步,把52配置51的从服务器
+          2 搭建mysql代理服务器 
+              * 安装提供服务的软件包 主配置文件/etc/maxscale.cnf,日志文件/var/log/maxscale/
+               #rpm -ivh maxscale-2.1.2-1.rhel.7.x86_64.rpm
+              * 修改服务的主配置文件/etc/maxscale.cnf
+                     9  更改线程数量auto 
+                     18 服务器IP
+                     35 定义监控的服务器
+                     52 不定义只读,全注释
+                     63 定义读写分离服务
+                     75 定义管理服务,不用更改
+                     85 读写分离端口号
+                     98 更改管理服务端口号
+                  vim /etc/maxscale.cnf
+                     [maxscale]
+                     threads=auto  表示线程数量   进程里面的最小工作单位(进程独享资源,线程共享资源)
+
+                     [server1]
+                     type=server
+                     address=192.168.4.51
+                     port=3306
+                     protocol=MySQLBackend
+
+                     [server2]
+                     type=server
+                     address=192.168.4.52
+                     port=3306
+                     protocol=MySQLBackend
+
+                     [MySQL Monitor]
+                     type=monitor
+                     module=mysqlmon
+                     servers=server1,server2
+                     user=maxscalemon
+                     passwd=123qqq...A
+                     monitor_interval=10000
+
+                    [Read-Write Service]
+                    type=service
+                    router=readwritesplit
+                    servers=server1,server2
+                    user=maxscalerouter
+                    passwd=123qqq...A
+                    max_slave_connections=100%
+
+                   [Read-Write Listener]
+                   type=listener
+                   service=Read-Write Service
+                   protocol=MySQLClient
+                   port=4006
+
+                   [MaxAdmin Listener]
+                   type=listener
+                   service=MaxAdmin Service
+                   protocol=maxscaled
+                   socket=default
+                   port=4016
+               * 添加授权用户
+                    host51:
+                    mysql> grant replication slave,replication client on *.* to maxscalemon@'%' identified by "123qqq...A";
+                    mysql> grant select on mysql.* to maxscalerouter@"%" identified by "123qqq...A";
+                    mysql> select host,user from mysql.user; 
+               * 启动代理服务
+                    #maxscale -f /etc/maxscale.cnf   启动进程
+                    #killall -9 maxscale             关闭进程
+                    #ps -C maxscale   查看进程
+                             
+
+               * 验证配置                                           
+                      1 在代理服务器本机连接管理服务,查看监控信息
+                    #maxadmin -uadmin -pmariadb -P4016 
+                    MaxScale> list servers
+Servers.
+-------------------+-----------------+-------+-------------+--------------------
+Server             | Address         | Port  | Connections | Status              
+-------------------+-----------------+-------+-------------+--------------------
+server1            | 192.168.4.51    |  3306 |           0 | Master, Running
+server2            | 192.168.4.52    |  3306 |           0 | Slave, Running
+-------------------+-----------------+-------+-------------+--------------------
+                      2 客户端连接代理访问数据
+                   host51> grant select,insert on db7.* to jim@"%" identified by "123qqq...A";  首先要在主mysql添加一个jim的授权用户
+                   host50# mysql -h192.168.4.57 -P4006 -ujim -p123qqq...A
+                      3 客户端验证读写分离
+                        从服务器添加一个数据,在客户端登录代理查看数据是在从服务器上查看的
+                       host52 mysql> insert into db7.a values(52);
+                              mysql> select * from db7.a;
+                       host50#mysql -h192.168.4.57 -P4006 -ujim -p123qqq...A
+                             mysql> select * from db7.a;
+二、mysql多实例(在192.168.4.50主机做)
+ 2.1 多实例:在1台服务器上运行多个数据库服务器
+ 2.2 为什么要用多实例:节约运维成本,提高硬件利用率
+ 2.3 配置mysql多实例
+     1 安装提供多实例服务软件
+       真机找包#scp mysql-5.7.20-linux-glibc2.12-x86_64.tar.gz root@192.168.4.50:/opt/
+
+      host50#tar -zvxf mysql-5.7.20-linux-glibc2.12-x86_64.tar.gz
+             mv mysql-5.7.20-linux-glibc2.12-x86_64 /usr/local/mysql
+             ls /usr/local/mysql/
+     2 编辑主配置文件/etc/my.cnf
+      [mysqld_multi]                                #启用多实例
+      mysqld=/usr/local/mysql/bin/mysqld_safe       #指定进程文件路径
+      mysqladmin=/usr/local/mysql/bin/mysqladmin    #指定管理命令路径
+      user=root                                     #指定系统进程用户
+
+      [mysqld1]                                     #实例进程名称,1表示实例标号
+      port=3307                                     #端口号
+      datadir=/dir1                                 #数据库目录,要手动创建
+      socket=/dir1/mysqld1.sock                       #指定sock文件的路径和名称
+      pid-file=/dir1/mysqld1.pid                     #进程pid号文件位置
+      log-error=/dir1/mysqld1.err                    #错误日志位置
+
+      [mysqld2]                                     #实例进程名称,1表示实例标号
+      port=3308                                     #端口号
+      datadir=/dir2                                 #数据库目录,要手动创建
+      socket=/dir2/mysqld2.sock                       #指定sock文件的路径和名称
+      pid-file=/dir2/mysqld2.pid                     #进程pid号文件位置
+      log-error=/dir2/mysqld2.err                    #错误日志位置
+
+     3 启动服务
+     #/usr/local/mysql/bin/mysqld_multi start 1
+     4 查看服务状态
+      #ss -anptu | grep 3307
+      #netstat -utnlp | grep :3307 
+     5 使用原始密码登录mysql服务
+      #/usr/local/mysql/bin/mysql -uroot -p'uAS;Ecq#h0Rr' -S /dir1/mysql.sock
+      #/usr/local/mysql/bin/mysql -uroot -p'apoy.P=/g6Yj' -S /dir2/mysql.sock
+      mysql> set password=password("123456");
+     6 停止多实例服务
+      #/usr/local/mysql/bin/mysqld_multi --user=root --password=123456 stop 1
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                         day8 数据分片   (50 56 53 54 55)
+
+
+一、数据分片
+   分库/分表
+   水平分割
+   垂直分割
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
