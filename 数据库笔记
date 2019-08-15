@@ -522,7 +522,30 @@ select * from t10;
                           三种记录方式
                            statement 报表模式
                            row 行模式
-                           mixed 混合模式
+                           mixed 混合模式能查看到命令
+				 2 查看默认使用的日志格式
+mysql> show variables like "binlog_format";
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| binlog_format | ROW   |
++---------------+-------+
+
+				 3 修改日志格式
+]# vim /etc/my.cnf
+[mysqld]
+binlog_format="mixed"
+:wq
+
+[root@host50 ~]# systemctl  restart mysqld
+[root@host50 ~]# mysql -uroot -p123456
+mysql> show variables like "binlog_format";
++---------------+-------+
+| Variable_name | Value |
++---------------+-------+
+| binlog_format | MIXED |
++---------------+-------+
+mysql> reset master;
                      #mysql -uroot -ptarena -e "show variables like 'binlog_format'"
                            
                            
@@ -658,6 +681,10 @@ mysqldump备份缺点:
                                                   day6 主从同步   ftp://172.40.50.117/2019/homework/
  
 一、mysql主从同步
+      异步复制:
+      全同步复制:
+      半同步复制:
+
     1.1 主从同步介绍
     1.2 主从同步原理
        Master
@@ -685,14 +712,14 @@ mysqldump备份缺点:
        配置:
        主:
       1 vim /etc/my.cnf
-       [mysqld]
+       [mysqld] 
          server_id=51
          log-bin=master51
         #systemctl restart mysqld
         #ls /var/lib/mysql/master51.*
         #mysql -uroot -p123456
          > show master status;       查看binlog日志内容
-       2 > grant replication slave on *.* to repluser@"%" identified by "123qqq...A";
+       2 > grant replication slave on *.* to repluser@"%" identified by "123qqq...A";  检查主从的状态权限
        3 > show grants for repluser@"%";     
        从:
      host51#systemctl restart mysqld
@@ -727,7 +754,35 @@ mysqldump备份缺点:
        #rm -rf master.info relay-log.info host52-relay*
       4 vim /var/lib/mysql/auto.cnf   更改UUID 是克隆出来的
      Last_IO_Error:Got fatal error 1236 from master when reading data from binary log: 'Could not find first log file name in binary log index file'
-     
+
+     1.5.1 在主服务器添加授权用户给客户端连接使用
+]# mysql  -uroot  -p123456
+mysql> create database db1;
+mysql> grant all on  db1.*  to  admin@"%" identified by "123qqq...A";
+mysql> grant select,insert,update,delete on db5.* to admin@"%";
+mysql> 
+		1.5.2 客户端使用授权用户连接主服务器，访问数据
+[root@host50 ~]# mysql -h192.168.4.51 -uadmin -p123qqq...A
+mysql> show grants;
+mysql> delete from  db5.b where name="lucy";
+mysql> show master status;
+mysql> update db5.b set name="jerry" where name="bob";
+mysql> create table db1.a(id int);
+mysql> insert into db1.a values(100);
+
+		1.5.3 在从服务器主机查看数据（能够看到和主服务器同样的数据）
+[root@host52 ~]# mysql -uroot -p123qqq...A
+mysql> show slave status\G;
+Last_SQL_Error: Error 'Operation DROP USER failed for 'admin'@'192.168.4.%'' on query. Default database: ''. Query: 'drop user admin@"192.168.4.%"'
+  Replicate_Ignore_Server_Ids:	 
+mysql> stop slave;
+mysql> grant all on *.* to  admin@"192.168.4.%" identified by "123qqq...A";
+mysql> start slave;
+mysql> show slave status\G;
+
+mysql> select  * from db5.b;
+mysql> select  * from db5.b;
+mysql> select  * from db1.a;
      
       5 主从从
       6 主主
@@ -760,7 +815,7 @@ mysqldump备份缺点:
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                  day7 数据读写分离和MySQL多实例
+                                                  day7 数据读写分离和MySQL多实例  50 57* 51 52
 一、数据读写分离
      1.1 什么是数据读写分离
           把客户端访问数据的读请求(select)和写请求(insert、update、delete)分别分配给不同的数据库服务器处理
@@ -828,9 +883,9 @@ mysqldump备份缺点:
                    socket=default
                    port=4016
                * 添加授权用户
-                    host51:
-                    mysql> grant replication slave,replication client on *.* to maxscalemon@'%' identified by "123qqq...A";
-                    mysql> grant select on mysql.* to maxscalerouter@"%" identified by "123qqq...A";
+                    host51直接同步:
+                    mysql> grant replication slave,replication client on *.* to maxscalemon@'%' identified by "123qqq...A";定义用户监视server1 2,确认主从进行读写分离.获取状态信息  主从和监控运行状态的权限
+                    mysql> grant select on mysql.* to maxscalerouter@"%" identified by "123qqq...A"; 路由用户,50登录jim,在57上用maxscalerouter这个用户去server1 2上查看有没有登录的jim用户
                     mysql> select host,user from mysql.user; 
                * 启动代理服务
                     #maxscale -f /etc/maxscale.cnf   启动进程
@@ -850,14 +905,17 @@ server1            | 192.168.4.51    |  3306 |           0 | Master, Running
 server2            | 192.168.4.52    |  3306 |           0 | Slave, Running
 -------------------+-----------------+-------+-------------+--------------------
                       2 客户端连接代理访问数据
+                     在主服务器51 添加访问数据连接用户
+                   mysql> create database db7;
+                   mysql> create table db7.a(id int);
                    host51> grant select,insert on db7.* to jim@"%" identified by "123qqq...A";  首先要在主mysql添加一个jim的授权用户
-                   host50# mysql -h192.168.4.57 -P4006 -ujim -p123qqq...A
+                   host50# mysql -h192.168.4.57 -P4006 -ujim -p123qqq...A    
                       3 客户端验证读写分离
                         从服务器添加一个数据,在客户端登录代理查看数据是在从服务器上查看的
                        host52 mysql> insert into db7.a values(52);
                               mysql> select * from db7.a;
                        host50#mysql -h192.168.4.57 -P4006 -ujim -p123qqq...A
-                             mysql> select * from db7.a;
+                              mysql> select * from db7.a;
 二、mysql多实例(在192.168.4.50主机做)
  2.1 多实例:在1台服务器上运行多个数据库服务器
  2.2 为什么要用多实例:节约运维成本,提高硬件利用率
@@ -902,33 +960,352 @@ server2            | 192.168.4.52    |  3306 |           0 | Slave, Running
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                         day8 数据分片   (50 56 53 54 55)
+                                                         day8 数据分片   (50 56* 53 54 55)
 
 
 一、数据分片
-   分库/分表
-   水平分割
-   垂直分割
+   1.1 分库/分表
+      什么是分库分表?
+          将存放在一台数据库服务器中的数据,按照特定方式进行拆分,分散存放到多台数据库服务器中,以达到分散单台服务器负载效果  
+      水平分割
+         按照表中指定字段的分片规则,将表记录按行切分,分散存储到多个数据库中,如1-10000在53的db1.a,10001-20000在54的db1.a.
+      垂直分割
+          将单个数据库的多个表按业务类型分类,分散存储到不同的数据库.
+  1.2 mycat用于数据分片
+       mycat是基于java的分布式数据库系统中间件,为高并发环境的分布式存储提供解决方案   
+     --适合数据大量写入的存储需求
+     --支持mysql、Oracle、Sqlserver、Mongodb等
+     --提供数据读写分离服务
+     --提供数据分片服务
+     --基于阿里巴巴Cobar进行研发的开源软件
+
+    mycat支持提供10中分片规则:
+       1 枚举法 sharding-by-intfile
+       2 固定分片 rule1
+       3 范围约定 auto-sharding-long
+       4 求模法 mod-long
+       5 日期列分区发 sharding-by-date
+       6 通配取模 sharding-by-pattern
+     7 ASCII码求模通配
+       8 编程指定 sharding-by-pattern
+       9 字符串拆分hash解析 sharding-by-stringhash
+       10 一致性hash sharding-by-murmur
+    
+      工作过程:
+         当mycat收到一个SQL命令时
+         解析SQL命令涉及到的表
+         然后看对表的配置,如果有分片规则则获取SQL命令里分片字段值,并分配分片函数,获得分片列表
+         然后将SQL命令发往对应的分片服务器去执行
+         最后收集和处理所有分片结果数据,并返回到客户端
+   
+       配置mycat服务器:
+       * mycat是java的软件需要装jdk.
+               #yum -y install java-1.8.0-openjdk
+               #which java
+               #java -version
+         * 装包   
+          56#tar -zxvf Mycat-server-1.6-RELEASE-20161028204710-linux.tar.gz
+          #mv mycat /usr/local/          
+         * 修改配置文件   .xml服务的主配置文件  .txt 和 .properties是分片规则配置文件
+                 1.定义连接用户个逻辑库名
+                  [root@host56 ~]# vim /usr/local/mycat/conf/server.xml(使用默认配置)
+                  [root@host56 ~]# vim /usr/local/mycat/conf/schema.xml
+<?xml version="1.0"?>
+<!DOCTYPE mycat:schema SYSTEM "schema.dtd">
+<mycat:schema xmlns:mycat="http://io.mycat/">
+
+        <schema name="TESTDB" checkSQLschema="false" sqlMaxLimit="100">
+                <!-- auto sharding by id (long) -->
+                <table name="travelrecord" dataNode="dn1,dn2,dn3" rule="auto-sharding-long" />
+
+                <table name="company" primaryKey="ID" type="global" dataNode="dn1,dn2,dn3" />
+                <table name="goods" primaryKey="ID" type="global" dataNode="dn1,dn2,dn3" />
+                <table name="hotnews" primaryKey="ID" autoIncrement="true" dataNode="dn1,dn2,dn3"
+                           rule="mod-long" />
+                <table name="employee" primaryKey="ID" dataNode="dn1,dn2,dn3"
+                           rule="sharding-by-intfile" />
+                <table name="customer" primaryKey="ID" dataNode="dn1,dn2,dn3"
+                           rule="sharding-by-intfile">
+                        <childTable name="orders" primaryKey="ID" joinKey="customer_id"
+                                                parentKey="id">
+                                <childTable name="order_items" joinKey="order_id"
+                                                        parentKey="id" />
+                        </childTable>
+                        <childTable name="customer_addr" primaryKey="ID" joinKey="customer_id"
+                                                parentKey="id" />
+                </table>
+        </schema>
+        <dataNode name="dn1" dataHost="localhost53" database="db1" />
+        <dataNode name="dn2" dataHost="localhost54" database="db2" />
+        <dataNode name="dn3" dataHost="localhost55" database="db3" />
+        <dataHost name="localhost53" maxCon="1000" minCon="10" balance="0"
+                          writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+                <heartbeat>select user()</heartbeat>
+                <writeHost host="hostM1" url="192.168.4.53:3306" user="lhyaya"
+                                   password="123qqq...A">
+                </writeHost>
+        </dataHost>
+
+        <dataHost name="localhost54" maxCon="1000" minCon="10" balance="0"
+                          writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+                <heartbeat>select user()</heartbeat>
+                <writeHost host="hostM2" url="192.168.4.54:3306" user="lhyaya"
+                                   password="123qqq...A">
+                </writeHost>
+        </dataHost>
+
+        <dataHost name="localhost55" maxCon="1000" minCon="10" balance="0"
+                          writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+                <heartbeat>select user()</heartbeat>
+                <writeHost host="hostM3" url="192.168.4.55:3306" user="lhyaya"
+                                   password="123qqq...A">
+                </writeHost>
+        </dataHost>
+
+</mycat:schema>
 
 
+                 2.定义要分片的表
+                  #cp  /usr/local/mycat/conf/schema.xml /root/
+                  #sed -i '56,77d' /usr/local/mycat/conf/schema.xml
+                  #sed -i '39,42d' /usr/local/mycat/conf/schema.xml
+                  #sed -i '16,18d' /usr/local/mycat/conf/schema.xml
+                  #wc -l /usr/local/mycat/conf/schema.xml
+                 
+                3.配置数据库服务器
+                   3.1 创建存储数据的库
+                          53 54 55 分别添加库db1 db2 db3     host53 mysql> create database db1;
+                                                    host54 mysql> create database db2;
+                                                    host55 mysql> create database db3;
+                   3.2 添加mycat连接用户
+                           53 54 55 都需要添加授权用户:   grant all on *.* to pljyaya@"%" identified by "123qqq...A";
+                 4.启动服务
+               #/usr/local/mycat/bin/mycat start
+               #/usr/local/mycat/bin/mycat stop     
+                 5.查看状态
+               [root@host56 mycat]# ss -anptu | grep 8066
+               [root@host56 mycat]# /usr/local/mycat/bin/mycat status
+               [root@host56 mycat]# ls /usr/local/mycat/logs/
+                 6.排错
+                 7.测试配置 
+                    看规则[root@host56 ~]# vim /usr/local/mycat/conf/schema.xml里的sharding-by-intfile,单后查找rule.xml对应的hash-int,在找           partition-hash-int.txt的文件
 
 
+                   7.1 客户端连接分片服务器查看数据
+                  [root@host50 ~]# mysql -h192.168.4.56 -uroot -p123456 -P8066
+                   7.2 分片规则
+                      7.2.1 枚举法 sharding-by-intfile
+                             字段值必须在列举范围内选择  56上查看sharding-by-intfile(分别去53 54 55查看)水平分割
+[root@host50 ~]# mysql -h192.168.4.56 -uroot -p123456 -P8066
+mysql> create table employee(ID int primary key auto_increment,sharding_id int,name char(15),home char(50),sex enum("man","woman"));
+
+                      7.2.2 求模法 mod-long(水平分割)创表添加数据
+                             根据字段值与设定的数字求模结果存储数据
+      [root@host50 ~]# mysql -h192.168.4.56 -uroot -p123456 -P8066
+      mysql> create table hotnews(id int,title char(50),comment char(100),worker char(20),up_time datetime);
+      mysql> insert into hotnews(id,title,comment,worker,up_time) values(7,"linux","apache server","nb",now()),(8,"shell","pxe         shell","wk",20190601090000), (9,"ope","nginx vpc","dmy",20190701090000),(10,"mysql","master-slave","plj",now());
+                      7.2.3 没有规则就不分割 类型是type="global"
+
+                      7.2.4 在分片服务器mycat添加新库新表
+                            * 添加新库 
+                [root@host56 ~]# vim /usr/local/mycat/conf/server.xml
+                <user name="root">
+                <property name="password">123456</property>
+                <property name="schemas">TESTDB,GAME</property>
+                             * 添加新表
+                 [root@host56 ~]# vim /usr/local/mycat/conf/schema.xml
+                                <schema name="GAME" checkSQLschema="false" sqlMaxLimit="100">
+                                <table name="game_user" dataNode="dn1,dn2,dn3" rule="mod-long" />
+                                <table name="game_pople" primaryKey="ID" dataNode="dn1,dn2,dn3"
+                                           rule="sharding-by-intfile" />
+                                </schema>
+                             * 重启服务生效
+                        #/usr/local/mycat/bin/mycat stop
+                        #/usr/local/mycat/bin/mycat start
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                         day9 mysql集群MHA   (50 57* 51 52 53 100)
+
+集群知识回顾:
+          集群分类           LB     负载均衡集群         相对应软件:       LVS、 Nginx、 Haproxy
+                       HA      高可用(主备)集群                      keepalived针对所有服务都可用、  MHA(只对mysql服务的高可用集群)
+                       HPC     高性能计算集群         
+
+一、MHA集群
+   MHA介绍:
+   1.2 部署MHA集群:
+       1.2.1 环境准备
+             * 安装依赖包   
+                   系统软件的perl和下载的perl包
+                   真机传包:         真机 ]$ scp -r mha-soft-student/ root@192.168.4.57:/opt/
+                  (51 52 53 57全装)  #yum -y install perl-*  本机直接通过yum安装perl包
+                             #cd /opt/mha-soft-student/
+                             #yum -y install perl-*.rpm  下载传到本机安装的perl包
+             * 无密码认证登录
+                 1 管理主机无密码连接所有数据库服务器 (以51举例然后以下同理)
+                   host57# ssh-keygen
+                   host57# ssh-copy-id root@192.168.4.51
+                   host57# ssh-copy-id root@192.168.4.52
+                   host57# ssh-copy-id root@192.168.4.53
+                             52 53 57 同理
+                 2 数据库彼此之间无密码连接
+                            同1
+                 3 一主多从服务配置
+               host51#vim /etc/my.cnf
+                      [mysqld]
+                      server_id=51
+                      log-bin=master5
+               host51#mysql -uroot -p123456
+                       mysql> grant replication slave on *.* to repluser@"%" identified by "123qqq...A";
+                       mysql>exit
+               host51#systemctl restart mysqld 
+               host51#mysql -uroot -p123456
+mysql> show master status;
++-----------------+----------+--------------+------------------+-------------------+
+| File            | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
++-----------------+----------+--------------+------------------+-------------------+
+| master51.000007 |      154 |              |                  |                   |
++-----------------+----------+--------------+------------------+-------------------+
+                             
+
+                host52#vim /etc/my.cnf
+                       [mysqld]
+                       server_id=52
+                host52#mysql -uroot -p123456
+                mysql> change master to master_host="192.168.4.51",master_user="repluser",master_password="123qqq...A",master_log_file="master51.000007",master_log_pos=154;
+                mysql> start slave;
+                mysql> show slave status\G;
 
 
+                host53#vim /etc/my.cnf
+                       [mysqld]
+                       server_id=52
+                host53#mysql -uroot -p123456
+                mysql> change master to master_host="192.168.4.51",master_user="repluser",master_password="123qqq...A",master_log_file="master51.000007",master_log_pos=154;
+                mysql> start slave;
+                mysql> show slave status\G;
+                    
+       1.2.2 配置管理主机 
+            * 前提是perl包都装好在装管理主机软件包:(管理主机上node和manager都需要装)
+             host57#cd /opt/mha-soft-student/
+             host57#rpm -ivh mha4mysql-node-0.56-0.el6.noarch.rpm   先装node节点包
+             host57#which perl
+             host57#tar -xf mha4mysql-manager-0.56.tar.gz           在装manager管理包
+             host57#cd mha4mysql-manager-0.56/ 
+             host57#perl Makefile.PL
+             host57#make
+             host57#make install
+            * 编辑主配置文件vim /etc/mha/app1.cnf
+             host57#mkdir /etc/mha
+             host57#cp /opt/mha-soft-student/mha4mysql-manager-0.56/samples/conf/app1.cnf /etc/mha/
+             #vim /etc/mha/app1.cnf
+[server default]
+manager_workdir=/etc/mha
+manager_log=/etc/mha/manager.log
+master_ip_failover_script=/etc/mha/master_ip_failover     故障切换脚本
 
+ssh_user=root
+ssh_port=22
 
+repl_user=repluser          同步授权用户
+repl_password=123qqq...A
 
+user=root                    监控用户
+password=123qqq...A
 
+[server1]
+hostname=192.168.4.51
+port=3306
+candidate_master=1
 
+[server2]
+hostname=192.168.4.52
+port=3306
+candidate_master=1
 
+[server3]
+hostname=192.168.4.53
+port=3306
+candidate_master=1
 
+            * 修改故障切换脚本 指定vip地址 192.168.4.100
+              host57#cp /opt/mha-soft-student/master_ip_failover /etc/mha/
+              host57#chmod +x /etc/mha/master_ip_failover                    给脚本权限
+              host57#vim /etc/mha/master_ip_failover
+                        改成192.168.4.100
 
+       1.2.3 配置数库服务器(数据节点)
+              * 先安装node软件
+              host51#rpm -ivh mha4mysql-node-0.56-0.el6.noarch.rpm
+              host51#rpm -ivh mha4mysql-node-0.56-0.el6.noarch.rpm                    
+              host51#rpm -ivh mha4mysql-node-0.56-0.el6.noarch.rpm
+              * 在主库部署VIP地址(上面的脚本只负责主库坏了才把VIP迁移,第一次不会主动部署主库的vip,所以第一次的主库VIP要手动配置上去)
+              host51#ifconfig eth0:1 192.168.4.100/24
+              host51#ifconfig eth0:1
+              * 添加授权用户root,自动同步 52、53 
+              host51#mysql> grant all on *.* to root@"%" identified by "123qqq...A";
+              * 在从52和53添加同步数据的连接用户repluser
+              host52#mysql>grant replication slave on *.* to repluser@"%" identified by "123qqq...A";
+              host53#mysql>grant replication slave on *.* to repluser@"%" identified by "123qqq...A";  
+              * 52和53上启用binlog日志文件
+                  log-bin=master51
+              * 在所有数据库服务器设置禁止自动删除本机的中继日志文件
+                  relay_log_purge=0    
+              * 在所有数据库服务器启用半同步复制模式
+                  plugin-load="rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so"
+                  rpl_semi_sync_master_enabled=1     
+                  rpl_semi_sync_slave_enabled=1
 
+总配置 51、52、53:
+]# vim /etc/my.cnf
+server_id=51
+log-bin=master51
+relay_log_purge=0
+plugin-load="rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so"
+rpl_semi_sync_master_enabled=1
+rpl_semi_sync_slave_enabled=1
+       1.2.4 验证配置
+              * 验证ssh配置
+                 #masterha_check_ssh --conf=/etc/mha/app1.cnf
+              * 验证主从同步
+                 #masterha_check_repl --conf=/etc/mha/app1.cnf
+                 MySQL Replication Health is OK.
+              * 验证
+[root@host51 ~]# mysql -uroot -p123qqq...A
+mysql> create database db9;
+mysql> create table db9.a (id int);
+mysql> grant select , insert on  db9.*  to yaya55@"%" identified by "123qqq...A";
+mysql> show grants for yaya55@"%";
++-------------------------------------------------+
+| Grants for yaya55@%                             |
++-------------------------------------------------+
+| GRANT USAGE ON *.* TO 'yaya55'@'%'              |
+| GRANT SELECT, INSERT ON `db9`.* TO 'yaya55'@'%' |
++-------------------------------------------------+
+mysql>  exit ;
+[root@host50 ~]# mysql -h192.168.4.100  -uyaya55  -p123qqq...A
+mysql> select  * from db9.a;
+Empty set (0.01 sec)
 
+mysql> insert into db9.a values(110);
+mysql> select  * from db9.a;
++------+
+| id   |
++------+
+|  110 |
++------+
+mysql>
+       1.2.5 启动管理服务
+                 先检查51上的192.168.4.100 ip是否配置
+             host57#masterha_manager --conf=/etc/mha/app1.cnf --remove_dead_master_conf --ignore_last_failover
 
-
-
-
+             host57#masterha_check_status --conf=/etc/mha/app1.cnf 
+       1.2.6 测试集群的高可用功能
+              在主服务器51上添加授权用户(主切换52或53)监控会跳出来
+                host51#systemctl stop mysqld
+                    
 
 
 
