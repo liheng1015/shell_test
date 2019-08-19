@@ -22,6 +22,8 @@ rpm -e --nodeps mariadb-server mariadb.
 查看数据库密码并访问数据库服务: 
 #grep password /var/log/mysqld.log
 #mysql -hlocalhost -uroot -p'*Bc1hFVWWhnK'
+查看软件版本:mysql> show variables like "%version%";
+查看存储引擎的命令:mysql> show engines;
 修改数据库密码:
 mysql> alter user root@"localhost" identified by "123qqq...A";
 设置默认长度和密码长度 
@@ -345,7 +347,7 @@ select * from t10;
                                                   day4 授权和备份
 一、用户授权
     1.1 什么是用户授权
-        在数据库服务器上添加新的连接用户,在添加用户时可以设置访问权限及连接密码.默认数据库管理员root用户本机登陆有授权权限.
+        在数据库服务器上添加新的连接用户,在添加用户时可以设置访问权限及连接密码.默认数据库管理员root用户本机登陆有授权权限. 慢查询 mysqldumpshow
     1.2 命令格式
       grant 授权列表 on 库名 to 用户名@"客户端地址" identifited by "密码";
         权限列表:all、usage、select update insert、select update(字段1...字段N)
@@ -618,7 +620,7 @@ mysqldump备份缺点:
       103  rm -rf *
       104  ls
       105  innobackupex --apply-log /root/allbak/       准备恢复数据                
-      106  innobackupex --copy-back /root/allbak/       开始恢复数据
+      106  innobackupex --copy-  /root/allbak/       开始恢复数据
       107  ls -ld /var/lib/mysql
       108  ls -l /var/lib/mysql
       109  chown -R mysql:mysql /var/lib/mysql          给所有者和组为mysql
@@ -825,7 +827,7 @@ mysql> select  * from db1.a;
                  中间件:mysql-proxy、 mycat、 maxscale
              3 为什么要配置读写分离(51、52主从关系,实现分流减轻51主服务器的压力) 
       1.3 配置数据读写分离
-          1 配置mysql 主从同步,把52配置51的从服务器
+          1 配置mysql 主从同步,把52配置51的从服务器	
           2 搭建mysql代理服务器 
               * 安装提供服务的软件包 主配置文件/etc/maxscale.cnf,日志文件/var/log/maxscale/
                #rpm -ivh maxscale-2.1.2-1.rhel.7.x86_64.rpm
@@ -1007,9 +1009,9 @@ server2            | 192.168.4.52    |  3306 |           0 | Slave, Running
           56#tar -zxvf Mycat-server-1.6-RELEASE-20161028204710-linux.tar.gz
           #mv mycat /usr/local/          
          * 修改配置文件   .xml服务的主配置文件  .txt 和 .properties是分片规则配置文件
-                 1.定义连接用户个逻辑库名
-                  [root@host56 ~]# vim /usr/local/mycat/conf/server.xml(使用默认配置)
-                  [root@host56 ~]# vim /usr/local/mycat/conf/schema.xml
+                 1.定义连接用户个逻辑库名 rule.xml分片规则
+                  [root@host56 ~]# vim /usr/local/mycat/conf/server.xml(使用默认配置)  设置连接账号及逻辑库
+                  [root@host56 ~]# vim /usr/local/mycat/conf/schema.xml  配置数据分片
 <?xml version="1.0"?>
 <!DOCTYPE mycat:schema SYSTEM "schema.dtd">
 <mycat:schema xmlns:mycat="http://io.mycat/">
@@ -1206,7 +1208,7 @@ manager_workdir=/etc/mha
 manager_log=/etc/mha/manager.log
 master_ip_failover_script=/etc/mha/master_ip_failover     故障切换脚本
 
-ssh_user=root
+ssh_user=root               ssh用户
 ssh_port=22
 
 repl_user=repluser          同步授权用户
@@ -1218,7 +1220,7 @@ password=123qqq...A
 [server1]
 hostname=192.168.4.51
 port=3306
-candidate_master=1
+candidate_master=1           竞选主库
 
 [server2]
 hostname=192.168.4.52
@@ -1305,7 +1307,361 @@ mysql>
        1.2.6 测试集群的高可用功能
               在主服务器51上添加授权用户(主切换52或53)监控会跳出来
                 host51#systemctl stop mysqld
-                    
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                              day10 PXC和MySQL存储引擎   (50 71 72 73)                    
+MHA 需要配置一主多从
+比较繁琐
+PXC 是基于高可用集群方案  同步多主复制插件
+
+PXC特点:
+      数据强一致性,无同步延迟
+      没有主从切换操作,无需使用VIP
+      支持InnoDB存储引擎
+      多线程复制
+      部署使用简单
+      支持节点自动加入,无需手动拷贝数据
+
+端口服务:
+3306 数据库服务端口
+4444 SST端口
+4567 集群通信端口
+4568 IST端口
+SST State Snaphot Transfer全量同步
+IST Incremental State Transfer增量同步
+
+以下是开始配置  rm -rf /var/lib/mysql
+* 71-73 配置:
+vim /etc/hosts
+192.168.4.71 pxcnode71
+192.168.4.72 pxcnode72
+192.168.4.73 pxcnode73
+
+* 安装软件 按顺序装
+#rpm -ivh libev-4.15-1.el6.rf.x86_64.rpm
+#yum -y install percona-xtrabackup-24-2.4.13-1.el7.x86_64.rpm
+#rpm -ivh qpress-1.1-14.11.x86_64.rpm
+#tar -xvf Percona-XtraDB-Cluster-5.7.25-31.35-r463-el7-x86_64-bundle.tar
+#yum -y install Percona-XtraDB-Cluster-*.rpm
+
+* 配置文件3台都要配置]#vim /etc/percona-xtradb-cluster.conf.d/mysqld.cnf 
+  -mysqld.cnf         //数据库服务运行参数配置文件
+  -mysqld_safe.cnf   //Percona Server 5.7 配置文件
+  -wsrep.cnf        //PXC集群配置文件
+  
+
+  71-73#vim /etc/percona-xtradb-cluster.conf.d/mysqld.cnf
+     [mysqld]
+      server-id=73
+        其他配置都是默认就行
+  71-73#vim /etc/percona-xtradb-cluster.conf.d/mysqld_safe.cnf  默认就行不需要配置
+  71-73#vim /etc/percona-xtradb-cluster.conf.d/wsrep.cnf
+      8  wsrep_cluster_address=gcomm://192.168.4.71,192.168.4.72,192.168.4.73 其群成员列表3台一样
+     25  wsrep_node_address=192.168.4.71                                      P1IP
+     27  wsrep_cluster_name=pxccluster                                        集群名3台必须相同
+     30  wsrep_node_name=pxcnode71                                            P1主机名
+     39  wsrep_sst_auth="sstuser:123qqq...A"                                  SST同步使用的用户名和密码3台一样
+
+* 启动服务 在一台服务器上启动就行
+          pxcnode71#systemctl start mysql@bootstrap.service
+          pxcnode71#grep password /var/log/mysqld.log         
+          pxcnode71#mysql -uroot -p".DzCBdzC*2?#"
+          pxcnode71#alter user root@"localhost" identified by "123456";
+          pxcnode71# grant reload,lock tables,replication client,process on *.* to sstuser@"localhost" identified by "123qqq...A"; 全量同步用户
+
+          pxcnode72#systemctl start mysql
+          pxcnode73#systemctl start mysql
+* 测试配置
+    #mysql -uroot -p"123456"
+    mysql> show status like "%wsrep%"; 查看集群信息
+
+    任意一台添加授权用户用于客户端登录  (注意:建表时,必须有主键字段primary key)
+    73#grant all on *.* to lh@"%" identified by "123456";
+    50#mysql -uroot -p123456 -h192.168.4.71
+
+    集群功能:
+     在任意一台服务器上添加访问数据的授权用户
+     在客户端使用授权用户连接任意数据服务器都可以存储数据,且可以查看到同样的数据
+     建表时,必须有主键字段primary key
+  高可用测试:
+    mysql> create table db10.a(id int primary key auto_increment,name char(50));
+    mysql> insert into db10.a(name) values("tom") 
+     停掉73服务,然后去72添加数据,在恢复73,数据也正常恢复.
+    [root@pxcnode73 PXC]# systemctl stop mysql
+    [root@pxcnode73 PXC]# ss -anptu | grep 3306
+    [root@pxcnode73 PXC]# ss -anptu | grep 4567
+    mysql> insert into db10.a(name) values("dc3")
+    mysql> insert into db10.a(name) values("dc13")
+    [root@pxcnode73 PXC]#tail -f /var/log/mysqld.log
+
+二、存储引擎
+    什么是Mysql存储引擎
+       是mysql服务软件自带的,功能程序,处理表的处理器,不同的存储引擎有不同的功能和数据存储方式.
+
+查看软件版本:mysql> show variables like "%version%";
+查看存储引擎的命令:mysql> show engines;
+建表指定存储引擎:
+查看表存储引擎:mysql> show create table db5.t1;
+修改表引擎:mysql> alter table db5.t1 engine=myisam;
+常用存储引擎myisam特点:支持表锁,不支持事务,事务回滚,外键
+常用存储引擎innodbde特点:支持行级锁定 支持事务,事务回滚,外键
+如何决定使用那种存储引擎:
+     select                     查多的适用myisam 比较节省系统硬件资源 读锁 支持并发
+      insert/update/delete      写多的适合innodb 支持对单张表的并发写 写锁 
+
+锁粒度:行级锁 表级锁
+锁类型:读锁 写锁
+查看当前锁:show status like "table_lock%";
+
+事物:
+事物回滚:
+事物的特点(ACID):
+
+行级锁:仅对被访问的行分别加锁
+表级锁:对整张表加锁
+查看当前锁状态:mysql> show status like "table_lock%";
+
+
+
+
+事物:mysql连接到执行完exit退出是一个事物
+事物回滚:操作过程中出现错误,可还原,没有commit提交的数据
+
+事物日志文件:
+ibdata1      未提交的
+ib_logfile0  提交的
+ib_logfile1  提交的
+
+事物特性(ACID):(查看自动提交和关闭自动提交)
+Atomic:原子性(要不成功要不失败)
+Consistency:一致性
+事物操作的前后,表中的记录没有变化
+Isolation 隔离性
+事物操作是相互隔离不受影响的,没有回车互相不知道
+Durability:持久性
+数据一旦提交,不可改变,永久改变表数据
+
+查看自动提交:show variables like "autocommit";
+关闭自动提交:set autocommit=off;
+数据回滚到之前数据:rollback;
+进行数据提交:commit;
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                              day11 搭建Redis数据库服务器   (50 51) 
+一、部署redis服务器
+      关系型数据库软件
+      非关系型软件(不仅是SQL)
+    
+    *源码包安装
+    host50 redis-4.0.8]#yum -y install gcc
+    host50 redis-4.0.8]#cd /root/
+    host50 redis-4.0.8]#tar -xzvf redis-4.0.8.tar.gz
+    host50 redis-4.0.8]#cd redis-4.0.8/
+    make && make install
+    * 配置运行服务运行参数
+    [root@host50 redis-4.0.8]# ./utils/install_server.sh
+       6379                                          端口号  
+     /etc/redis/6379.conf                 主配置文件
+     /var/lib/redis/6379                  数据库目录
+     /usr/local/bin/redis-server          服务启动程序
+     /usr/local/bin/redis-cli             命令连接命令
+     /usr/log/redis_6379.log              日志文件
+
+      默认是开启的开启状态:/etc/init.d/redis_6379 start
+      开启查看状态#netstat -utnlp | grep :6379
+      访问服务及基本操作命令:redis-cli 
+     >ping              检测连接状态
+     >set name bob      存数据设置1个key值
+     >get bob           获取key值
+     >mset x 1 y 1 z 3  存数据设置多个key值 
+     >mget x y z name   查看多个key值
+     >select 1          切换库编号0-15
+     >keys *            显示所有变量名
+     >keys ??           显示二个字符的key
+     >exists y          检测key名是否存在
+     >ttl x             查看key生存时间,-1永不过期
+     >expire y 30       设置生存有效时间30s
+     >type x            查看key类型(注:key的类型取决于我是怎么创建的key值)
+     >lpush   ss        创建列表
+     >move x 1          移动key值x到库1里
+     >del x             删除指定的key值,删除变量x
+     >flushdb           删除当前所在库的所有key
+     >flushall          删除内存所有的key
+     >save              保存所有key到硬盘
+     >shutdown          停止服务并自动保存所有的key
+   * 设置密码 IP地址 端口
+     #vim /etc/redis/6379.conf
+      requirepass 123456
+      bind 192.168.4.50
+      port 6350
+      #redis-cli -h 192.168.4.50 -p 6350 -a 123456
+      #/etc/init.d/redis_6379 stop
+      #redis-cli -h 192.168.4.50 -p 6350 -a 123456 shutdown   必须这样关
+      #/etc/init.d/redis_6379 start
+      #redis-cli -h 192.168.4.50 -p 6350 -a 123456
+      #vim /etc/init.d/redis_6379    修改第43行 
+          $CLIEXEC -h 192.168.4.50 -p 6350 -a 123456 shutdown
+      #/etc/init.d/redis_6379 start
+      #/etc/init.d/redis_6379 stop             修改完配置文件之后才能继续脚本执行stop,要不然需要上面的-a 123456 shutdown
+
+      #/var/run/redis_6379.pid  如果起不来,去这个目录把这个进程号删掉重启一下
+
+   * 配置lnmp
+   * 配置支持php支持的redis
+     $#scp /linux-soft/03/redis/lnmp/php-redis-2.2.4.tar.gz root@192.168.4.51:/root
+     host51#tar -xzvf php-redis-2.2.4.tar.gz
+     host51#cd phpredis-2.2.4/
+     host51#phpize
+     host51#./configure --with-php-config=/usr/bin/php-config
+     host51#make
+     host51#make install
+     host51#ls /usr/lib64/php/modules/
+     host51#php -m | grep -i redis
+  
+   * 修改PHP的程序的主配置文件,加载redis模块 
+     host51#vim /etc/php.ini
+                728 extension_dir = "/usr/lib64/php/modules/"
+                730 extension = "redis.so" 
+
+   * 测试配置  (存取脚本都写在一起了)
+     vim /usr/local/nginx/html/redis/php
+<?php
+$redis = new redis();
+$redis->connect('192.168.4.50',6350);
+$redis->auth("123456");
+$redis->set('linux','redhat');
+echo $redis->get("linux");
+?>
+
+curl http://192.168.4.51/set.php
+                                                                                                                                                      
+     
+        
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                              day12 创建集群 分布式高可用集群 (50 57* 51 52 53 54 55 56)
+redis集群是通过CRC16算法进行hash计算与16384取余计算进行分配服务器.管理主机是一个ruby脚本
+高可用最少3个主            主服务器上有hash槽如0-5461 在管理主机创建集群的时候会给主服务器自动分配hasg槽.
+1、创建集群
+        1、在所有集群主机上运行redis服务(只往主上存数据)
+        2、配置管理主机57
+         [student@room9pc01 redis]$ scp redis-4.0.8.tar.gz root@192.168.4.57:/root/
+         [student@room9pc01 redis]$ scp redis-3.2.1.gem root@192.168.4.57:/root/
+         [root@host57 ~]#yum -y install ruby
+         [root@host57 ~]#which gem
+         [root@host57 ~]#gem install redis-3.2.1.gem
+         [root@host57 ~]#mkdir /root/bin
+         [root@host57 ~]#cp redis-trib.rb /root/bin
+         [root@host57 ~]#redis-trib.rb help
+         3、在所有主机上启用集群功能(51-56都要执行)
+           [root@host51 ~]# redis-cli -h 192.168.4.51 -p 6351
+                   查看集群功能
+           [root@host51 ~]# /etc/init.d/redis_6379 stop
+           [root@host51 ~]# vim /etc/redis/6379.conf          开启集群功能
+                               815 cluster-enabled yes 
+                               823 cluster-config-file nodes-6379.conf
+                               829 cluster-node-timeout 5000
+                               :wq
+           [root@host51 ~]#/etc/init.d/redis_6379 start
+           [root@host51 ~]#cat /var/lib/redis/6379/nodes-6379.conf
+           [root@host53 ~]# ss -nptul | grep redis-server 
+         4、创建集群(57)
+           [root@host57 ~]# redis-trib.rb create --replicas 1 192.168.4.51:6351 192.168.4.52:6352 192.168.4.53:6353 192.168.4.54:6354 192.168.4.55:6355 192.168.4.56:6356                                   创建集群
+           [root@host57 ~]# redis-trib.rb info 192.168.4.51:6351      查看集群信息
+           [root@host57 ~]# redis-trib.rb check 192.168.4.51:6351     查看集群主从信息包括hash槽
+
+           [root@host51 ~]#cat /var/lib/redis/6379/nodes-6379.conf    查看集群节点信息
+           [root@host51 ~]#redis-cli -h 192.168.4.51 -p 6351
+           192.168.4.51:6351> cluster nodes                           查看集群节点信息
+              
+         5、排错
+              数据必须清空  redis服务器没有启用集群功能
+              每一台都需要删除nodes节点配置之后在重启redis服务
+           [root@host51 ~]# redis-cli -h 192.168.4.51 -p 6351
+           >flushall
+           [root@host51 ~]rm -rf   /var/lib/redis/6379/nodes-6379.conf
+
+         6、访问集群存/取数据
+             
+          [root@host50 ~]# redis-cli -c -h 192.168.4.56 -p 6356
+          192.168.4.56:6356> set name lh
+          -> Redirected to slot [5798] located at 192.168.4.52:6352
+          OK
+          192.168.4.52:6352> set xixi xixi
+          -> Redirected to slot [15923] located at 192.168.4.53:6353
+          OK
+          192.168.4.53:6353> set haha haha
+          -> Redirected to slot [3662] located at 192.168.4.51:6351
+          OK
+
+         7、集群工作原理
+           获取变量名 用CRC16算法 做hash算法 把计算机的结果 与 16384做求模计算根据计算结果存储数据
+         8、测试集群的高可用集群
+               停止master主机的redis服务
+            master后对应的slave自动被切换选举为master
+               原master启动后会自动配置为当前master的slave           
+
+2、管理集群
+     2.1 向集群里添加新的redis服务器
+          2.1.1 添加master角色服务器
+                 1 克隆一台192.168.4.58
+                 2 运行redis服务器并启用集群功能
+                 3 在管理主机向机群添加master角色的redis服务器
+                   [root@host57 ~]# redis-trib.rb add-node 192.168.4.58:6358 192.168.4.52:6352
+                   [root@host57 ~]# redis-trib.rb info 192.168.4.51:6351
+             
+                 4 给添加的master角色
+                   [root@host57 ~]# redis-trib.rb check 192.168.4.52:6352   先查看所有ID
+                   [root@host57 ~]# redis-trib.rb reshard 192.168.4.52:6352
+                   [root@host57 ~]# redis-trib.rb reshard 192.168.4.52:6352
+                          How many slots do you want to move (from 1 to 16384)? 4096
+                          What is the receiving node ID? e309029bea745faabd0bb003ce2d081609baf3ff
+                          Source node #1:all
+                          yes
+
+          2.1.2 添加slave角色服务器
+                 1 克隆一台192.168.4.59
+                 2 运行redis服务器并启用集群功能
+                 3 在管理主机向机群添加master角色的redis服务器
+                [root@host57 ~]#redis-trib.rb add-node --slave 192.168.4.59:6359 192.168.4.51:6351
+                [root@host57 ~]#redis-trib.rb check 192.168.4.52:6352
+          2.1.3 删除slave角色服务器 前面是集群随便一个IP,后面跟的是slave移除主机的ID
+                [root@host57 ~]#redis-trib.rb del-node 192.168.4.51:6351 3cfcd70086f02c032f7f974e2f3c9ab7e3abbffe
+                [root@host57 ~]#redis-trib.rb check 192.168.4.52:6352
+
+          2.1.4 删除master角色服务器先释放hash槽,在移除主机 前面是集群随便一个IP,后面跟的是master移除主机的ID
+                [root@host57 ~]#redis-trib.rb reshard 192.168.4.51:6351
+                [root@host57 ~]#redis-trib.rb check 192.168.4.52:6352
+                [root@host57 ~]#redis-trib.rb info 192.168.4.52:6352
+                [root@host57 ~]#redis-trib.rb del-node 192.168.4.51:6351 e309029bea745faabd0bb003ce2d081609baf3ff
+
+          2.1.5 hash槽平均分配
+                [root@host57 ~]#redis-trib.rb rebalance 192.168.4.51:6351
+          2.1.6 把移除的主机添加进来
+                先去59上清除记录的集群记录,然后清空记录并删除所有数据
+                [root@host59 redis-4.0.8]# redis-cli -h 192.168.4.59 -p 6359
+                192.168.4.59:6359> cluster reset
+                192.168.4.59:6359> flushall
+                   去管理57添加集群 
+                [root@host57 redis-4.0.8]#[root@host57 ~]# redis-trib.rb add-node --slave --master-id 511a7f7845dbf4df25086b0b19fcb7dfd496925e 192.168.4.59:6359 192.168.4.52:6352
+                [root@host57 ~]# redis-trib.rb info 192.168.4.51:6351
+
+          2.1.7 把集群中的机器恢复为独立的redis服务器 51~58
+                1 删除数据                 
+                2 停止服务
+                3 禁用集群功能
+                4 删除数据库下的所有文件
+
+
+                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                              day13 Redis主从复制持久化   (50 51) 
+
 
 
 
