@@ -1,0 +1,68 @@
+                                                             Gluster 分布式存储
+
+raid 0   raid 1(把多个硬盘组合一起)  需要1000T的话raid不能实现. 支持24块硬盘仅是同一个server的硬盘
+所以有了Gluster 分布式存储(条带卷 镜像卷) 
+是吧多个主机的硬盘组合1-10台server组合在一起,称为卷(条带卷,复制卷,离散卷,分布式卷)
+node1---node10,
+client访问:没有中心节点,访问任意node(1-10)都行(客户端需要安装软件)   
+直连存储:
+网络存储:NFS samaba iscsi
+分布式存储:  ceph fastDFS gluster
+
+node节点 信任池(多台电脑) Brick块 volume合之后就是卷(卷)
+
+ftp://172.40.50.118/share/glusterfs.tar.gz  
+                        不需要中心节点 环境准备: node7 node8 node9
+
+   11  yum -y install *
+   12  systemctl start glusterd.service 
+更爱域名:vim /etc/hosts
+192.168.4.7 node1
+192.168.4.8 node2
+192.168.4.9 node3
+192.168.4.10 client
+添加池子:
+   16  gluster peer status 
+   17  gluster peer probe node2
+   18  gluster peer status 
+   19  gluster peer probe node3
+   20  gluster peer status 
+添加硬盘 每个上面添加一块硬盘  lv支持快照,所以生产会经常用到快照 分区(inode区描述信息默认128字节和block区默认数据4k)
+(7 8 9同样的配置)
+vgcreate myvg /dev/vdb
+lvcreate -n node1-brick1 -L 2G myvg
+lvcreate -n node1-brick2 -L 2G myvg
+mkfs.xfs -i size=512 /dev/myvg/node1-brick1
+mkfs.xfs -i size=512 /dev/myvg/node1-brick2
+mkdir -p /bricks/brick1
+mkdir -p /bricks/brick2
+mount /dev/myvg/node1-brick1 /bricks/brick1
+mount /dev/myvg/node1-brick2 /bricks/brick2
+mkdir /bricks/brick1/x
+
+
+一台配置就行:(默认分布式卷)
+gluster volume create xyz node1:/bricks/brick1/x node2:/bricks/brick1/x node3:/bricks/brick1/x
+
+gluster volume list 
+gluster volume info  xyz
+gluster volume start xyz
+gluster volume info  xyz
+
+
+客户端访问:
+yum -y install glusterfs-fuse
+mkdir /mnt/
+mount -t glusterfs 192.168.4.7:/xyz /mnt
+
+
+
+
+
+
+
+
+
+
+
+
