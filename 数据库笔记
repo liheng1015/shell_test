@@ -949,13 +949,14 @@ server2            | 192.168.4.52    |  3306 |           0 | Slave, Running
       log-error=/dir2/mysqld2.err                    #错误日志位置
 
      3 启动服务
-     #/usr/local/mysql/bin/mysqld_multi start 1
+     [root@host50 mysql]# /usr/local/mysql/bin/mysqld_multi start 1
+     [root@host50 mysql]# /usr/local/mysql/bin/mysqld_multi start 2
      4 查看服务状态
       #ss -anptu | grep 3307
       #netstat -utnlp | grep :3307 
      5 使用原始密码登录mysql服务
-      #/usr/local/mysql/bin/mysql -uroot -p'uAS;Ecq#h0Rr' -S /dir1/mysql.sock
-      #/usr/local/mysql/bin/mysql -uroot -p'apoy.P=/g6Yj' -S /dir2/mysql.sock
+      #/usr/local/mysql/bin/mysql -uroot -p'uAS;Ecq#h0Rr' -S /dir1/mysqld1.sock
+      #/usr/local/mysql/bin/mysql -uroot -p'apoy.P=/g6Yj' -S /dir2/mysqld1.sock
       mysql> set password=password("123456");
      6 停止多实例服务
       #/usr/local/mysql/bin/mysqld_multi --user=root --password=123456 stop 1
@@ -1763,5 +1764,3 @@ Hash表:一个hash表有多列,每列对应一个值
 * hvals bob                     获取bob列的所有值
 * hgetall bob                   获取列名和值
 * hdel bob tel                  删除hash表的tel列  删除列
-
-
