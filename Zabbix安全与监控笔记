@@ -1,0 +1,314 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+6次课主要两部分
+   监控服务器部署与使用 前2天                            IDC监控和linux运维都需要监控 必会的技术
+   安全(系统安全、网络安全、数据安全、服务安全)后4天   运维安全必掌握的知识             安全工程师不会拿到 
+      抓包与扫描工具
+                                              day1 监控与服务安全   (Zabbix web1 web2) 
+         #which iostat
+         #rpm -qf /bin/iostat
+         #iostat  磁盘读写情况
+默认端口号10051
+一、Zabbix基础
+         zlib数据压缩的模块
+
+1.3.4 初始化准备
+   安装nginx
+yum -y install gcc pcre-devel zlib-devel openssl-devel
+cd Zabbix/
+tar -xf nginx-1.12.2.tar.gz
+cd nginx-1.12.2/
+./configure --with-http_ssl_module --with-http_stub_status_module
+make && make install
+yum -y install php php-mysql php-fpm
+yum -y install mariadb mariadb-devel mariadb-server
+vim /usr/local/nginx/conf/nginx.conf
+   解注释65-71
+/usr/local/nginx/sbin/nginx
+systemctl start mariadb
+systemctl start php-fpm
+ss -anptu | grep :80
+ss -anptu | grep :3306
+ss -anptu | grep :9000
+
+ 部署zabbix
+yum -y install net-snmp-devel curl-devel libevent-devel
+cd /opt/Zabbix/
+tar -xf zabbix-3.4.4.tar.gz
+cd zabbix-3.4.4/
+./configure --enable-server --enable-proxy --enable-agent --with-mysql=/usr/bin/mysql_config --with-net-snmp --with-libcurl
+make install
+ls /usr/local/
+ls /usr/local/etc/
+ls /usr/local/bin/
+ls /usr/local/sbin/
+
+   创建数据库与数据库账户及导入表
+mysql
+> create database zabbix character set utf8;
+
+> grant all on  zabbix.* to  zabbix@"localhost" identified by "zabbix";
+  #cd /opt/Zabbix/zabbix-3.4.4/database/mysql/
+  #mysql -uzabbix -pzabbix zabbix < schema.sql 
+  #mysql -uzabbix -pzabbix zabbix < images.sql 
+  #mysql -uzabbix -pzabbix zabbix < data.sql 
+  #mysql -uzabbix -pzabbix zabbix
+   部署上线zabbix页面
+  #cd zabbix-3.4.4/frontends/php
+  #cp -a * /usr/local/nginx/html/
+  #chmod -R 777 /usr/local/nginx/html/*
+此时登录会报错http://192.168.2.5/index.php
+  #vim /usr/local/nginx/conf/nginx.conf
+  http {
+      fastcgi_buffers 8 16k;
+      fastcgi_buffer_size 32k;
+      fastcgi_connect_timeout 300;
+      fastcgi_send_timeout 300;
+      fastcgi_read_timeout 300;
+  }
+  # /usr/local/nginx/sbin/nginx -s stop
+  # /usr/local/nginx/sbin/nginx
+  # yum -y install php-mbstring php-bcmath php-gd php-xml php-ldap  安装php相关的依赖包
+  #vim /etc/php.ini
+     384 max_execution_time = 300   最大执行时间
+     394 max_input_time = 300       服务器接收数据的时间限制
+     672 post_max_size = 32M        POST数据最大容量
+     878 date.timezone = Asia/Shanghai 设置时区
+  #systemctl restart php-fpm
+1.3.5 初始化配置(登录管理页面)
+  http://192.168.2.5/index.php
+  #cat /usr/local/nginx/html/conf/zabbix.conf.php
+1.3.6 登录管理页面
+     用户名:  admin
+     默认密码:zabbix
+       修改管理员密码
+             登录页面点右上角小人
+       修改页面语言为中文
+             
+1.3.7 启动zabbix监控服务
+   # vim /usr/local/etc/zabbix_server.conf  修改配置文件
+         DBHost=localhost       数据库主机
+         DBName=zabbix          数据库名称
+         DBUser=zabbix          数据库账户
+         DBPassword=zabbix      数据库密码
+         LogFile=/tmp/zabbix_server.log 数据库设置日志
+
+   # useradd zabbix                  创建进程所有者用户,不创建不能启动
+   # zabbix_server                   启动服务
+   # netstat -utnlp | grep 10051     查看服务端口号
+   #ps -C zabbix_server              查看进程
+   #killall -9 zabbix_server         关闭服务进程 
+
+ 
+二、Zabbix监控服务
+     监控192.168.4.100
+     *配置客户端
+      1 安装zabbix软件
+       #yum -y install gcc pcre-devel
+       #cd /opt/Zabbix/ 
+       #tar -xf zabbix-3.4.4.tar.g
+       #cd zabbix-3.4.4/
+       #./configure --enable-agent
+       make install
+       #ls /usr/local/etc/
+       #ls /usr/local/bin
+       #ls /usr/local/sbin 
+     2 修改配置文件
+        vim /usr/local/etc/zabbix_agentd.conf
+          Server=127.0.0.1,192.168.2.5     允许谁来访问我的地址列表(zabbix的服务器端)
+          ServerActive=192.168.2.5:10051   监控服务器IP
+          LogFile=/tmp/zabbix_agentd.log
+     3 启动服务
+           #useradd zabbix
+           #zabbix_agentd
+           #netstat -utnlp | grep :10050
+      * 配置
+           都是zabbix图形界面配置
+           配置--->主机--->添加主机--->选用模板
+     
+自定义模板先创建自定义脚本,zabbix_get检测一下,然后登录zabbix管理界面,添加模板(参考服务端配置模板)
+*** 自定义监控命令
+                        1 启用自定义监控
+100#vim /usr/local/etc/zabbix_agentd.conf                 //启用自定义
+   265  Include=/usr/local/etc/zabbix_agentd.conf.d/*.conf
+   280  UnsafeUserParameters=1
+			2 编写监控脚本
+100# vim /usr/local/etc/zabbix_agentd.conf.d/a.conf
+UserParameter=get_user_num,wc -l /etc/passwd | awk ' {print $1} '
+:wq
+			3 重启动服务
+[root@web100 ~]# killall -9 zabbix_agentd
+[root@web100 ~]# zabbix_agentd 
+[root@web100 ~]# netstat -utnlp  | grep  :10050
+tcp        0      0 0.0.0.0:10050           0.0.0.0:*     LISTEN      30908/zabbix_agentd  
+			4 测试编写的监控脚本
+[root@web100 ~]# zabbix_get  -s 127.0.0.1 -k get_user_num
+22
+                      
+*** 服务端配置模板
+登录管理页面做如下操作
+1 创建监控模板
+2 创建应用集    存放命令的文件  user_pass
+3 创建监控项   对应的监控命令   get_user_num_itm
+4 调用监控的模板监控主机
+5 查看监控数据
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                              day1 Zabbix监控告警机制   (Zabbix web1 web2) 
+1、Zabbix监控告警机制
+报警支持:
+邮件
+即时
+短信
+
+ 创建触发器,执行告警条件
+  配置--->模板--->触发器--->创建
+
+
+查看告警 检测中 --->触发器
+ 1.3 创建动作:(邮件 即时 短信)
+    登录管理页面做如下配置: 自己发给自己.
+     发件服务   管理--->报警媒介类型--->Email (SMTP服务器 localhost;SMTP电邮 root@localhost) 
+     收件人    管理--->用户--->(admin的)报警媒介-->添加(收件人也是自己root@localhost)
+     创建动作   配置--->动作--->创建动作内容(触发条件选择触发器)-->然后操作(默认接收人是标题,操作添加邮件还是短信,收到的用户就是上一步操作的收件人admin,0无穷大60s)
+
+清空邮箱,删除ls /var/spool/mail/下的文件
+[root@zabbix_server ~]#which mail
+[root@zabbix_server ~]#yum provides mail*
+[root@zabbix_server ~]# yum -y install postfix
+[root@zabbix_server ~]# systemctl start postfix.service
+[root@zabbix_server ~]# systemctl enable postfix.service
+[root@zabbix_server ~]# mail -s "xxx" zabbix < /etc/hosts     发给zabbix用户
+[root@zabbix_server ~]# su - zabbix
+[zabbix@zabbix_server ~]$ mail
+Heirloom Mail version 12.5 7/5/10.  Type ? for help.
+"/var/spool/mail/zabbix": 3 messages 3 new
+>N  1 root                  Fri Aug 23 16:29  20/806   "xxx"
+ N  2 root                  Fri Aug 23 16:29  20/806   "xxx"
+ N  3 root                  Fri Aug 23 16:29  20/806   "xxx"
+[root@zabbix_server ~]#rm -rf /var/spool/mail/*          清空所有邮件
+
+2、进阶:
+    自动发现:发现主机、添加主机,添加主机到组,连接模板等.
+    配置自动发现
+        1 创建自动发现
+             配置--->自动发现---->创建发现规则(ip范围,时间间隔,检查什么协议:检查可以是)
+        2 创建Action动作(发现之后做的动作)
+            配置--->动作--->(事件源)自动发现--->创建动作--->动作和操作--->添加主机组和模板
+        3 通过动作,执行添加主机
+
+主被动监控:
+   被动就是server主动向client server发送消息
+   主动是client server主动向server发送消息
+默认host201都是被动模式,server向client发送0
+主动模式配置:
+     1 安装zabbix软件
+       #yum -y install gcc pcre-devel
+       #cd /opt/Zabbix/ 
+       #tar -xf zabbix-3.4.4.tar.g
+       #cd zabbix-3.4.4/
+       #./configure --enable-agent
+       make install
+       #ls /usr/local/etc/
+       #ls /usr/local/bin
+       #ls /usr/local/sbin 
+     2 修改主配置文件
+     201#vim /usr/local/etc/zabbix_agentd.conf
+       93  #Server=127.0.0.1
+       118 StartAgents=0
+       134 ServerActive=192.168.2.5:10051
+       145 Hostname=web201
+       183 RefreshActiveChecks=120
+    201#useradd zabbix
+    201#zabbix_agentd
+    201#netstat -utnlp | grep 10050   此时是没有端口,有进程的,是正确的
+    201#ps -C zabbix_agentd  有进程
+         PID TTY          TIME CMD
+         8469 ?        00:00:00 zabbix_agentd
+         8470 ?        00:00:00 zabbix_agentd
+         8471 ?        00:00:00 zabbix_agentd
+      3 配置监控服务器
+          注:所有监控模板都是被动方式,更改模板为主动模式
+          登录管理页面进行操作
+         1 克隆已有的模板
+            配置--->模板(勾选一个拖到最下,有个全克隆全勾)   
+         2 修改监控项模式
+           克隆之后--->返回模板的(监控项全勾)(往下拖有一个批量更新)--->点类型--->主动式(更新Ok)
+         3 添加主机
+         4 关联模板
+         5 查看监控数据
+
+      4 拓扑图和聚合图形
+        拓扑图  监视中--->拓扑图--->创建拓扑图
+        聚合图形 在一个页面显示多个数据图表,方便了解多组数据
+
+3 监控案例
+[root@web1 ~]# curl http://192.168.2.100/status
+Active connections: 1      正在连接数 
+server accepts handled requests
+ 1 1 1       历史连接数 历史处理数  发送请求数量
+Reading: 0 Writing: 1 Waiting: 0
+                响应数量                 等待处理请求
+
+
+
+      3.1监控Nginx
+            1 安装源码Nginx
+            2 访问status
+            3 编写脚本
+#!/bin/bash
+case $1 in
+"active")
+curl -s http://192.168.2.100/status | awk 'NR==1{print $3}';;
+"accep")
+curl -s http://192.168.2.100/status | awk 'NR==3{print $1}';;
+"waiting")
+curl -s http://192.168.2.100/status | awk 'NR==4{print $6}';;
+esac
+           3 启用自定义监控项功能,并把脚本定义为监控命令
+[root@web1 opt]# vim /usr/local/etc/zabbix_agentd.conf.d/a.conf
+      UserParameter=get_user_num,wc -l /etc/passwd | awk ' {print $1} '
+      UserParameter=get_nginx_status[*],/usr/local/bin/nginx_status.sh $1
+[root@web1 opt]# killall -9 zabbix_agentd
+[root@web1 opt]# zabbix_agentd
+[root@web1 opt]# chmod +x /usr/local/bin/nginx_status.sh 
+[root@web1 opt]# zabbix_get -s 127.0.0.1 -k get_nginx_status[active]
+1
+[root@web1 opt]# zabbix_get -s 127.0.0.1 -k get_nginx_status[accep]
+10 
+[root@web1 opt]# zabbix_get -s 127.0.0.1 -k get_nginx_status[waiting]
+
+       登录管理页面作如下操作
+            创建监控模板ATM2
+            创建应用集 
+            创建监控项 3个监控项
+
+
+100#vim /tcp_status.sh
+#!/bin/bash
+case $1 in
+"estab")
+ss -antp | awk 'BEGIN{x=0}/^ESTAB/{x++}END{print x}';;
+"close_wait")
+ss -antp | awk 'BEGIN{x=0}/^CLOSE-WAIT/{x++}END{print x}';;
+"time_wait")
+ss -antp | awk 'BEGIN{x=0}/^TIME-WAIT/{x++}END{print x}';;
+esac
+
+[root@web1 bin]# vim /usr/local/etc/zabbix_agentd.conf.d/a.conf
+UserParameter=get_user_num,wc -l /etc/passwd | awk ' {print $1} '
+UserParameter=get_nginx_status[*],/usr/local/bin/nginx_status.sh $1
+UserParameter=get_tcp_status[*],/usr/local/bin/tcp_status.sh $1
+
+[root@web1 opt]# killall -9 zabbix_agentd
+[root@web1 opt]# zabbix_agentd
+[root@web1 opt]# chmod +x /usr/local/bin/tcp_status.sh 
+[root@web1 bin]# zabbix_get -s 127.0.0.1 -k get_tcp_status[estab]
+[root@web1 bin]# zabbix_get -s 127.0.0.1 -k get_tcp_status[close_wait]
+[root@web1 bin]# zabbix_get -s 127.0.0.1 -k get_tcp_status[time_wait]
+
+ 登录管理页面作如上操作
+
