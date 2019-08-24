@@ -1,0 +1,220 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                             day1 服务安全
+账号安全:
+1 设置账号有效期chage
+[root@host50 ~]# chage -l lh               查看账号有效期
+[root@host50 ~]# chage -E 2019/08/31 lh    指定账号有效时间
+[root@host50 ~]# chage -d 0 lh             强制用户第一次登录修改密码(密码要求数字字母大小写)
+2 账号锁定和解锁passwd
+[root@host50 ~]# passwd -S lh                        查看状态
+lh LK 2019-08-24 0 99999 7 -1 (密码已被锁定。)         锁定就是没密码
+[root@host50 ~]# passwd -S root
+root PS 2019-04-13 0 99999 7 -1 (密码已设置，使用 SHA512 算法。)
+[root@host50 ~]# grep lh /etc/shadow
+lh:!!:18132:0:99999:7::18139:                        !! 就是无密码(也是;无法登陆)
+[root@host50 ~]# passwd -l lh                         锁定 (该用户无法登陆)
+[root@host50 ~]# passwd -u lh                         解锁
+ 3 创建账号默认配置文件在/etc/login.defs
+ 4 登陆的时候可以隐藏系统版本和内核版本
+  修改配置文件之后可一隐藏  /etc/issue  /etc/issue.net
+文件安全:
+1 查看和修改文件特殊属性(a 仅可追加;i 不可变)
+[root@host50 ~]# lsattr /etc/passwd    查看文件特殊属性(a属性)
+---------------- /etc/passwd
+[root@host50 ~]# chattr +a /etc/passwd   +a只能>>操作
+[root@host50 ~]# useradd rr
+useradd：无法打开 /etc/passwd 
+[root@host50 ~]# lsattr /etc/passwd
+-----a---------- /etc/passwd 
+[root@host50 ~]# chattr -a /etc/passwd
+                                                     (i属性不可变)
+[root@host50 ~]# chattr +i /etc/resolv.conf  源文件不可变,不可移动删除修改  一般重要文件不准动的文件
+[root@host50 ~]# lsattr /etc/resolv.conf     查看文件属性有i属性
+----i----------- /etc/resolv.conf
+
+2 禁用非必要的系统服务
+chkconfig  httpd on/off               redhat 5或6
+systemctl enable/disable httpd        redhat 7
+
+service httpd start/stop/restart/status     redhat 5或6
+systemctl start/stop/restart/status  httpd  redhat 7
+
+用户切换与提权:
+su - 用户   切换的同时,把系统环境也切换目标用户
+su  用       仅切换用户,不切换到目标用户环境
+su - -c "vim /etc/my.cnf" root 
+su操作的log记录文件安全日志文件
+/var/log/secure
+root用户下查看cat /var/log/secure | grep su
+
+用户提权:sudo 系统管理员账号root用户配置系统的普通用户有执行自身命令的权限.
+主配置文件:/etc/sudoers
+visudo 或vim /etc/sudoers
+[root@host50 bin]# usermod -G wheel lh
+[root@host50 bin]#su - lh
+[lh@host50 ~]$ sudo yum -y install postfix
+提权格式
+        普通用户  主机名列表=命令列表 (必须)
+    #vim /etc/sudoers   
+    #mike   localhost,host50=/sbin/*,!/sbin/ifconfig
+
+普通用户执行提权命令 sudo 提权命令
+普通用户可以执行提权命令  sudo -l (必须输入自己登陆系统的密码才能查看)
+
+在50上创建dc,可以管理50主机的mysql数据库服务(修改)
+[root@host50 ~]# which systemctl 
+/bin/systemctl
+[root@host50 ~]# which vim
+/bin/vim
+[root@host50 ~]# vim /etc/sudoers
+dc localhost,host50=/bin/systemctl * mysqld,/bin/vim /etc/my.cnf
+:wq!
+[root@host50 ~]# su - dc
+[dc@host50 ~]$ sudo -l
+[dc@host50 ~]$ sudo vim /etc/my.cnf
+[dc@host50 ~]$ sudo systemctl restart mysqld
+
+启用日志文件    /var/log/sudo.log
+[root@host50 ~]# vim /etc/sudoers
+  Defaults logfile="/var/log/sudo.log"
+[root@host50 ~]# su - dc
+[dc@host50 ~]$ sudo systemctl restart mysqld
+[root@host50 ~]# ls /var/log/sudo.log
+
+使用别名做用户提权(别名名称必须使用大写字母定义)
+      User_Alias 定义用户别名
+      Host_Alias 定义主机别名
+      Cmnd_Adlias 定义命令别名
+
+[root@host50 ~]# vim /etc/sudoers
+Host_Alias MYSER=localhost,host50
+Cmnd_Alias MYCMD=/bin/rpm,/bin/yum
+
+root    ALL=(ALL)       ALL
+mike    MYSER=/sbin/*,!/sbin/ifconfig,MYCMD
+dc      MYSER=/bin/systemctl * mysqld,/bin/vim /etc/my.cnf,MYCMD
+
+
+3 ssh访问控制
+   3.1 服务常用配置项
+       主配置文件
+     [root@host50 bin]# vim /etc/ssh/sshd_config
+       PasswordAuthentication yes      口令认证
+       #PubkeyAuthentication yes         秘钥认证
+
+   3.2 黑白名单(目标服务器的ssh服务运行,允许客户端使用本机的所有用户连接ssh)
+       客户端控制来访本地用户
+       白名单:仅允许使用白名单列表里的用户连接
+       AllowUswes root@192.168.4.254 mike
+       黑名单:仅仅不允许黑名单列表的用户
+       DenyUsers mike
+       例子:  [root@host50 bin]# vim /etc/ssh/sshd_config  用黑就禁白
+          AllowUsers root@192.168.4.254 mike 
+
+  3.3 ssh服务认证登录(口令 密钥对)
+rm -rf ~/.ssh
+真机创建密钥对,把公钥传个50,然后在ssh 50的时候就不需要密码验证(51无密码连接50)
+ 51创建密钥对:
+[root@host51 ~]# ssh-keygen
+[root@host51 ~]# ssh-copy-id root@192.168.4.50
+[root@host51 ~]# ssh -X root@192.168.4.50 
+
+4 SELinux   linux扩展安全
+  集成到Linux内核(2.6及以上)
+  操作系统提供可制定的策略 管理工具
+查看SELinux状态
+[root@host50 ~]# sestatus
+[root@host50 ~]# rpm -qa | grep -i selinux
+启用selinux
+[root@host50 ~]# ll /etc/selinux/config
+[root@host50 ~]# vim /etc/selinux/config  3种模式
+SELINUX=enforcing 
+
+targeted  保护本机常用的网络服务  1
+minimum                       2
+mls                            3
+[root@host50 ~]# touch /.autorelabel 自动重置标签,不做的话ssh就不能用了
+[root@host50 ~]# reboot
+[root@host50 ~]# sestatus
+
+
+ 策略安全上下文:
+  查看安全上下文: -Z
+      文件 ls -lZ /etc/hosts
+      目录ls -ldZ /etc
+      进程ps aux -Z | grep httpd
+[root@host50 ~]# ls -lZ /etc/hosts
+-rw-r--r--. root root system_u:object_r:net_conf_t:s0  /etc/hosts
+[root@host50 ~]# ls -ldZ /etc
+drwxr-xr-x. root root system_u:object_r:etc_t:s0       /etc
+[root@host50 ~]# ps -aux -Z | grep httpd
+system_u:system_r:httpd_t:s0    root       791  0.0  0.9 339456 13628 ?        Ss   17:36   0:00 /usr/sbin/httpd -DFOREGROUND
+system_u:system_r:httpd_t:s0    apache     834  0.0  0.4 339456  6820 ?        S    17:36   0:00 /usr/sbin/httpd -DFOREGROUND
+system_u:system_r:httpd_t:s0    apache     836  0.0  0.4 339456  6820 ?        S    17:36   0:00 /usr/sbin/httpd -DFOREGROUND
+system_u:system_r:httpd_t:s0    apache     837  0.0  0.4 339456  6820 ?        S    17:36   0:00 /usr/sbin/httpd -DFOREGROUND
+system_u:system_r:httpd_t:s0    apache     838  0.0  0.4 339456  6820 ?        S    17:36   0:00 /usr/sbin/httpd -DFOREGROUND
+system_u:system_r:httpd_t:s0    apache     839  0.0  0.4 339456  6820 ?        S    17:36   0:00 /usr/sbin/httpd -DFOREGROUND
+unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 root 908 0.0  0.0 112724 984 pts/0 S+ 17:46   0:00 grep --color=auto httpd
+
+
+一般操作规律
+        移动的文件,原有的上下文属性不变    
+        复制的文件,自动继承目标位置的上下文  自动继承父目录的上下文
+
+用户 角色 访问类型 选项
+system_u:object_r:net_conf_t:s0  
+
+
+[root@host50 ~]# vim 10.txt
+[root@host50 ~]# ls -ldZ /root/
+dr-xr-x---. root root system_u:object_r:admin_home_t:s0 /root/
+[root@host50 ~]# ls -ldZ /root/10.txt 
+-rw-r--r--. root root unconfined_u:object_r:admin_home_t:s0 /root/10.txt
+[root@host50 ~]# mv /root/10.txt /var/www/html/
+[root@host50 ~]# ls -lZ /var/www/html/10.txt 
+-rw-r--r--. root root unconfined_u:object_r:admin_home_t:s0 /var/www/html/10.txt
+[root@host50 ~]# ls -ldZ /var/www/html/
+drwxr-xr-x. root root system_u:object_r:httpd_sys_content_t:s0 /var/www/html/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
