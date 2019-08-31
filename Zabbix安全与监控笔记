@@ -12,7 +12,6 @@
 默认端口号10051
 一、Zabbix基础
          zlib数据压缩的模块
-
 1.3.4 初始化准备
    安装nginx
 yum -y install gcc pcre-devel zlib-devel openssl-devel
@@ -218,10 +217,10 @@ Heirloom Mail version 12.5 7/5/10.  Type ? for help.
      2 修改主配置文件
      201#vim /usr/local/etc/zabbix_agentd.conf
        93  #Server=127.0.0.1
-       118 StartAgents=0
-       134 ServerActive=192.168.2.5:10051
-       145 Hostname=web201
-       183 RefreshActiveChecks=120
+       118 StartAgents=0                  禁止被动监控
+       134 ServerActive=192.168.2.5:10051 监控服务器IP,一定要取消127.0.0.1
+       145 Hostname=web201          告诉监控服务器,是谁发的数据信息一定要和zabbix服务器配置的监控主机名称一致 
+       183 RefreshActiveChecks=120  默认120s检测一次
     201#useradd zabbix
     201#zabbix_agentd
     201#netstat -utnlp | grep 10050   此时是没有端口,有进程的,是正确的
@@ -311,4 +310,10 @@ UserParameter=get_tcp_status[*],/usr/local/bin/tcp_status.sh $1
 [root@web1 bin]# zabbix_get -s 127.0.0.1 -k get_tcp_status[time_wait]
 
  登录管理页面作如上操作
+
+
+
+
+
+
 
