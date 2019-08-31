@@ -817,7 +817,7 @@ mysql> select  * from db1.a;
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                  day7 数据读写分离和MySQL多实例  50 57* 51 52
+                                                  day7 数据读写分离和MySQL多实例  50 57* 51 52   当51坏,写操作不会切换52上
 一、数据读写分离
      1.1 什么是数据读写分离
           把客户端访问数据的读请求(select)和写请求(insert、update、delete)分别分配给不同的数据库服务器处理
@@ -1129,7 +1129,7 @@ mysql> create table employee(ID int primary key auto_increment,sharding_id int,n
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                         day9 mysql集群MHA   (50 57* 51 52 53 100)
+                                                         day9 mysql集群MHA   (50 57* 51 52 53 100) (装的慢)
 
 集群知识回顾:
           集群分类           LB     负载均衡集群         相对应软件:       LVS、 Nginx、 Haproxy
@@ -1370,7 +1370,7 @@ vim /etc/hosts
           pxcnode71#mysql -uroot -p".DzCBdzC*2?#"
           pxcnode71#alter user root@"localhost" identified by "123456";
           pxcnode71# grant reload,lock tables,replication client,process on *.* to sstuser@"localhost" identified by "123qqq...A"; 全量同步用户
-
+        去72 73上start
           pxcnode72#systemctl start mysql
           pxcnode73#systemctl start mysql
 * 测试配置
@@ -1461,7 +1461,7 @@ Durability:持久性
     host50 redis-4.0.8]#cd /root/
     host50 redis-4.0.8]#tar -xzvf redis-4.0.8.tar.gz
     host50 redis-4.0.8]#cd redis-4.0.8/
-    make && make install
+    host50 redis-4.0.8]#make && make install
     * 配置运行服务运行参数
     [root@host50 redis-4.0.8]# ./utils/install_server.sh
        6379                                          端口号  
@@ -1476,7 +1476,7 @@ Durability:持久性
       访问服务及基本操作命令:redis-cli 
      >ping              检测连接状态
      >set name bob      存数据设置1个key值
-     >get bob           获取key值
+     >get name           获取key值
      >mset x 1 y 1 z 3  存数据设置多个key值 
      >mget x y z name   查看多个key值
      >select 1          切换库编号0-15
@@ -1555,14 +1555,18 @@ redis集群是通过CRC16算法进行hash计算与16384取余计算进行分配�
          [root@host57 ~]#yum -y install ruby
          [root@host57 ~]#which gem
          [root@host57 ~]#gem install redis-3.2.1.gem
+         [root@host57 ~]#tar -zxvf redis-4.0.8.tar.gz
+         [root@host57 ~]#cd  redis-4.0.8/src/
          [root@host57 ~]#mkdir /root/bin
          [root@host57 ~]#cp redis-trib.rb /root/bin
+                         chmod  +x   /root/bin/redis-trib.rb
          [root@host57 ~]#redis-trib.rb help
          3、在所有主机上启用集群功能(51-56都要执行)
-           [root@host51 ~]# redis-cli -h 192.168.4.51 -p 6351
+           [root@host51 ~]# redis-cli -h 192.168.4.51 -p 6351  
                 192.168.4.51:6351> cluster nodes    查看集群功能
            [root@host51 ~]# /etc/init.d/redis_6379 stop
-           [root@host51 ~]# vim /etc/redis/6379.conf          开启集群功能
+           [root@host51 ~]# vim /etc/redis/6379.conf         开启集群功能
+                                         70  192.168.4.58
                                815 cluster-enabled yes 
                                823 cluster-config-file nodes-6379.conf
                                829 cluster-node-timeout 5000
@@ -1571,7 +1575,7 @@ redis集群是通过CRC16算法进行hash计算与16384取余计算进行分配�
            [root@host51 ~]#cat /var/lib/redis/6379/nodes-6379.conf
            [root@host53 ~]# ss -nptul | grep redis-server 
          4、创建集群(57)
-           [root@host57 ~]# redis-trib.rb create --replicas 1 192.168.4.51:6351 192.168.4.52:6352 192.168.4.53:6353 192.168.4.54:6354 192.168.4.55:6355 192.168.4.56:6356                                   创建集群
+           [root@host57 ~]# redis-trib.rb create --replicas 1 192.168.4.51:6351 192.168.4.52:6352 192.168.4.53:6353 192.168.4.54:6354 192.168.4.55:6355 192.168.4.56:6356  --->yes                     创建集群跟随1个从库
            [root@host57 ~]# redis-trib.rb info 192.168.4.51:6351      查看集群信息
            [root@host57 ~]# redis-trib.rb check 192.168.4.51:6351     查看集群主从信息包括hash槽
 
@@ -1588,7 +1592,7 @@ redis集群是通过CRC16算法进行hash计算与16384取余计算进行分配�
 
          6、访问集群存/取数据
              
-          [root@host50 ~]# redis-cli -c -h 192.168.4.56 -p 6356
+          [root@host50 ~]# redis-cli -c -h 192.168.4.56 -p 6356   -c调用算法以集群的方式存储数据
           192.168.4.56:6356> set name lh
           -> Redirected to slot [5798] located at 192.168.4.52:6352
           OK
@@ -1656,9 +1660,7 @@ redis集群是通过CRC16算法进行hash计算与16384取余计算进行分配�
                 2 停止服务
                 3 禁用集群功能
                 4 删除数据库下的所有文件
-
-
-                 
+     
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ####################################################################################################################################
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1764,3 +1766,288 @@ Hash表:一个hash表有多列,每列对应一个值
 * hvals bob                     获取bob列的所有值
 * hgetall bob                   获取列名和值
 * hdel bob tel                  删除hash表的tel列  删除列
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                 day01 综合项目第一天 (web33 web44 mysql11 mysql22 monitor55 maxscale77 WEBstorage_NFS30) 
+涉及技术:
+  -- 逻辑卷
+  -- 数据库服务
+ -- MySql主从同步
+  -- 数据读写分离
+ -- NFS共享存储
+  -- 监控服务 
+ 1 配置逻辑卷 (配置逻辑卷的目的是当磁盘不够用在线扩展磁盘大小,把逻辑卷挂在到数据库的目录下/var/lib/mysql目录下)
+ 2 配置数据库服务器()
+ 3 配置主从同步
+ 4 配置读写分离服务
+ 5 配置共享存储NFS
+ 6 配置网站服务
+ 7 部署监控服务zabbix
+
+   *1 配置逻辑卷(11 22 同样的配置)
+    6  fdisk /dev/vdb  
+    7  fdisk /dev/vdc
+    8  fdisk -l /dev/vdb        需要配置8e,fdisk进行t配置8e
+   14  yum -y install lvm2
+   16  vgcreate vg0 /dev/vdb1 /dev/vdc1
+   17  vgs
+   18  vgdisplay
+   20  lvcreate -n lv0 -L 9.99G vg0
+   21  lvs
+   22  mkfs.xfs /dev/vg0/lv0 
+   23  blkid /dev/vg0/lv0
+
+  *2 配置数据库服务器(11 22 同样的配置 切记应该先关服务清空/varlib/mysql,在进行挂载起服务)
+   26  tar -xf mysql-5.7.17.tar 
+   27  ls
+   28  yum -y install mysql-community-*.rpm
+   33  vim /etc/fstab 
+         /dev/vg0/lv0    /var/lib/mysql xfs      defaults        0 0
+   34  mount -a
+   36  systemctl start mysqld
+   37  cat /var/log/mysqld.log | grep password
+   38  mysql -uroot -p"u(QFX.sYs6vR"(进入mysql修改密码在登录)
+   39  systemctl enable mysqld
+   40  mysql -uroot -p"123qqq...A"
+[root@mysql11 opt]# df -h /var/lib/mysql
+文件系统             容量  已用  可用 已用% 挂载点
+/dev/mapper/vg0-lv0   10G  166M  9.9G    2% /var/lib/mysql
+[root@mysql11 opt]# 
+
+  *3 配置主从同步()
+       配置主服务器:
+           1 启用binlog日志
+           2 授权用户
+           3 查看binlog日志信息
+       配置从服务器:
+           1 设置server_id
+           2 确保与主服务器数据一致
+           3 指定主库信息
+           4 启动slave程序
+           5 查看状态
+       主:1 vim /etc/my.cnf
+       [mysqld] 
+         server_id=51
+         log-bin=master51
+        #systemctl restart mysqld
+        #ls /var/lib/mysql/master51.*
+        #mysql -uroot -p123456
+         > show master status;       查看binlog日志内容
+       2 > grant replication slave on *.* to repluser@"%" identified by "123qqq...A";  检查主从的状态权限
+       3 > show grants for repluser@"%";     
+       从:
+     host51#systemctl restart mysqld
+     host51#mysqldump -uroot -p123456 --master-data db5 > /root/db5.sql
+     host51#scp /root/db5.sql root@192.168.4.52:/opt/
+     host52#vim /etc/my.cnf
+           [mysqld]
+           server_id=52
+     host52#mysql -uroot -p123456 db5 < /opt/db5.sql
+     host52#mysql -uroot -p123456 db5 -e "use db5;show tables" 
+     host52#grep master51 /opt/db5.sql
+     host52#mysql -uroot -p123456
+            mysql> show slave status  \G;
+            mysql> change master to master_host="192.168.4.51",master_user="repluser",
+                   master_password="123qqq...A",master_log_file="master51.000002",master_log_pos=154;
+            mysql> start slave;
+            mysql> show slave status  \G;
+
+    *4 配置读写分离服务(77安装maxscale软件包,具体配置参考上面读写分离笔记)
+    *5 配置共享存储NFS  192.168.4.30
+       添加一块10G硬盘
+    7  fdisk /dev/vdb 
+    8  mkfs.xfs /dev/vdb1
+   10  blkid /dev/vdb1 
+   11  mkdir /sitedir
+       chmod o+w /sitedir/ 
+   12  vim /etc/fstab 
+       /dev/vdb1       /sitedir        xfs     defaults        0 0
+   13  mount -a
+   14  yum -y install nfs-utils.x86_64 rpcbind.x86_64 
+   15  vim /etc/exports
+         /sitedir *(rw)
+   17  exportfs -r
+   18  systemctl start rpcbind.service 
+   19  systemctl start nfs
+   20  systemctl enable rpcbind.service 
+   21  systemctl enable nfs
+   22  showmount -e localhost               查看共享
+
+    *6 配置网站服务(注:33和44 配置一样)
+      web33:
+   15  yum -y install httpd
+   16  yum -y install nfs-utils.x86_64 
+   18  showmount -e
+   19  showmount -e 192.168.4.30
+   21  vim /etc/fstab
+        192.168.4.30:/sitedir /var/www/html nfs defaults,_netdev 0 0
+   22 systemctl start httpd
+   23 systemctl enable httpd
+   24 systemctl  enable remote-fs.target //设置远程加载服务开机运行
+
+    *7 部署监控服务zabbix 192.168.4.55
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                 day01 综合项目第二天 (redis 6台 管理主机 1台87,PXC是mysql的集群 3台 71-73,LB负载均衡集群88-89) 
+加快网速的访问速度:把网站经常被访问的数据,存储到内存服务器里
+redis集群6台服务器
+步骤如下:
+   1 分别在6台服务器上安装源码的redis软件,并做初始化配置(81-86全部装上redis,步骤参考上面)
+   2 停止运行的redis服务修改配置文件启用集群功能,启动服务,查看端口
+   3 管理主机部署ruby脚本部署环境,创建管理集群的脚本,查看脚本帮助信息
+   4 管理主机上执行创建集群并查看集群信息
+   5 在客户端主机访问集群执行存取数据的操作
+
+
+配置PHP支持连接redis集群(存取数据)
+ 删除httpd配置
+[root@web33 ~]# systemctl stop httpd
+[root@web33 ~]# systemctl disable httpd
+[root@web33 ~]# umount /var/www/html/
+[root@web33 ~]# vim /etc/fstab              注释开机挂载
+  #192.168.4.30:/sitedir /var/www/html nfs defaults,_netdev 0 0
+部署LNMP环境
+测试LNMP环境
+配置PHP支持连接redis集群
+编写PHP脚本连接集群存取数据
+客户端访问网站脚本存取数据
+   51  tar -xf lnmp_soft.tar.gz 
+   52  ls
+   53  cd lnmp_soft/
+   54  ls
+   55  tar -xf nginx-1.12.2.tar.gz 
+   56  cd nginx-1.12.2/
+   57  yum -y install gcc openssl-devel pcre-devel
+   58  ./configure 
+   59  make && make install
+   60  yum -y install   mariadb   mariadb-server   mariadb-devel
+   61  yum -y  install  php   php-mysql
+   62   yum -y  install  php-fpm
+   64  ss -anpt | grep :80
+   65  vim /usr/local/nginx/conf/nginx.conf    修改配置文件改成php
+   66  /usr/local/nginx/sbin/nginx 
+   67  ss -anpt | grep :80
+   68  vim /etc/fstab 
+   69  mount -a
+配置PHP支持连接redis集群和编写PHP脚本
+   87  tar -xf redis-cluster-4.3.0.tgz 
+   88  rpm -q gcc php-devel
+   89  yum -y install php-devel
+   90  cd redis-4.3.0/
+   91  phpize 
+   92  ./configure --with-php-config=/usr/bin/php-config
+   93  make
+   94  make install
+   95  ls /usr/lib64/php/modules/
+   96  vim /etc/php.ini 
+        728 extension_dir = "/usr/lib64/php/modules/"
+        730 extension = "redis.so"
+   97  systemctl restart php-fpm
+   99  vim /etc/php.ini 
+  102  ls /opt/
+  103  vim /opt/rediscluster.php                          脚本是写好传进来的
+  104  cd /opt/
+  105  cp rediscluster.php /usr/local/nginx/html/scr.php
+  106  ls /usr/local/nginx/html/scr.php
+  107  cat /usr/local/nginx/html/scr.php
+  108  vim /usr/local/nginx/html/scr.php
+  109  curl http://192.168.4.33/scr.php
+
+
+PXC 集群3台linux系统服务器192.168.4.71-73(代替读写分离,解决单点故障)数据库迁移(参考PXC)
+       在3台服务器192.168.4.71-73,安装pxc软件
+       在任意1台服务器启动集群活动,并使用数据库管理员初始密码登录、重置密码登录
+      在任意1台服务器启动集群服务,并使用数据库管理员出事密码登录/重置登录密码 创建授权用户
+      在另外2台服务上,启动数据库服务,数据库;管理员登录,查看授权用户
+     在3台主机分别查看集群信息
+      授权客户端访问数据的连接用户
+      客户端使用授权用户访问集群存/取数据
+    把mysql主从同步结构的数据,迁移到pxc集群上
+      	   8  把mysql主从同步结构的数据迁移到PXC 集群上。
+		1 停止22从服务器的slave 进程  stop slave; 13：00
+		2 使用innobackupex 对22 做数据完全备份
+		3 把完全备份拷贝到PXC集群主机做数据恢复（innobackupex）
+		4 启动mysql数据库服务
+		5 查看slave 进程的状态
+		6 查看数据
+
+
+LB集群haproxy
+ip地址 192.168.4.81 做调度器,把访问数据库服务的连接请求平均分发给71/72/73
+	1 安装haproxy软件
+	2 修改配置文件
+	3 启动服务
+	4 登陆管理页面，查看调度信息
+	5 测试配置
+[root@lb-host88 ~]#yum -y install haproxy.x86_64
+[root@lb-host88 ~]#vim /etc/haproxy/haproxy.cfg
+listen status
+     mode http
+     bind *:80
+     stats enable
+     stats uri /admin
+     stats auth admin:admin
+
+listen  mysql-rewrite 0.0.0.0:3306
+   balance roundrobin  #调度算法
+   mode tcp            #mysql 得使用 tcp 协议
+   option tcpka        #使用长连接
+   server  pxcnode1 192.168.4.71:3306 check inter 2000 rise 2 fall 5
+   server  pxcnode2 192.168.4.72:3306 check inter 2000 rise 2 fall 5
+   server  pxcnode3 192.168.4.73:3306 check inter 2000 rise 2 fall 5
+[root@lb-host88 ~]# systemctl start haproxy
+[root@lb-host88 ~]# systemctl enable haproxy
+
+
+ot@web33 ~]# mysql -h192.168.4.81 -uyaya99 -p123456 -e "select @@hostname"
+ot@web33 ~]# mysql -h192.168.4.81 -uyaya99 -p123456 -e "select @@hostname"
+ot@web33 ~]# mysql -h192.168.4.81 -uyaya99 -p123456 -e "select @@hostname"
+
+HA集群keepalived
+1 在2台主机上安装keepalived软件
+	2 把主机81 配置为主服务器
+	3 把主机82 配置为备用服务器
+	4 启动服务
+[root@lb-host88 ~]#yum install -y keepalived
+[root@haproxy82 ~]# cat /etc/keepalived/keepalived.conf 
+! Configuration File for keepalived
+global_defs {
+   notification_email {
+     acassen@firewall.loc
+     failover@firewall.loc
+     sysadmin@firewall.loc
+   }
+   notification_email_from Alexandre.Cassen@firewall.loc
+   smtp_server 192.168.200.1
+   smtp_connect_timeout 30
+   router_id LVS_DEVEL
+   vrrp_skip_check_adv_addr
+   vrrp_strict
+   vrrp_garp_interval 0
+   vrrp_gna_interval 0
+   vrrp_iptables  #禁止iptables 
+}
+vrrp_instance VI_1 {
+    state BACKUP
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+    virtual_ipaddress {
+        192.168.4.250
+    }
+}
+
+[root@lb-host88 ~]#vim /etc/keepalived/keepalived.conf
+[root@lb-host88 ~]#systemctl restart keepalived.service 
+[root@lb-host88 ~]#iptables -F
+[root@lb-host88 ~]#setenforce 0
+       
+
+
