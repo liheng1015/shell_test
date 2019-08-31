@@ -16,9 +16,9 @@ root PS 2019-04-13 0 99999 7 -1 (密码已设置，使用 SHA512 算法。)
 lh:!!:18132:0:99999:7::18139:                        !! 就是无密码(也是;无法登陆)
 [root@host50 ~]# passwd -l lh                         锁定 (该用户无法登陆)
 [root@host50 ~]# passwd -u lh                         解锁
- 3 创建账号默认配置文件在/etc/login.defs
+ 3 创建账号的默认配置文件在/etc/login.defs    创建用户什么选项也不加,这个配置文件就是默认的配置
  4 登陆的时候可以隐藏系统版本和内核版本
-  修改配置文件之后可一隐藏  /etc/issue  /etc/issue.net
+  修改配置文件之后可一隐藏  /etc/issue  /etc/issue.net   把这两个配置文件里的内容改掉不相关内容(一共就两行)
 文件安全:
 1 查看和修改文件特殊属性(a 仅可追加;i 不可变)
 [root@host50 ~]# lsattr /etc/passwd    查看文件特殊属性(a属性)
@@ -76,7 +76,7 @@ dc localhost,host50=/bin/systemctl * mysqld,/bin/vim /etc/my.cnf
 [dc@host50 ~]$ sudo vim /etc/my.cnf
 [dc@host50 ~]$ sudo systemctl restart mysqld
 
-启用日志文件    /var/log/sudo.log
+启用日志文件    /var/log/sudo.log  记录用户的提权操作
 [root@host50 ~]# vim /etc/sudoers
   Defaults logfile="/var/log/sudo.log"
 [root@host50 ~]# su - dc
@@ -140,7 +140,7 @@ mls                            3
 [root@host50 ~]# sestatus
 
 
- 策略安全上下文:
+一 策略安全上下文:
   查看安全上下文: -Z
       文件 ls -lZ /etc/hosts
       目录ls -ldZ /etc
@@ -158,14 +158,12 @@ system_u:system_r:httpd_t:s0    apache     838  0.0  0.4 339456  6820 ?        S
 system_u:system_r:httpd_t:s0    apache     839  0.0  0.4 339456  6820 ?        S    17:36   0:00 /usr/sbin/httpd -DFOREGROUND
 unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023 root 908 0.0  0.0 112724 984 pts/0 S+ 17:46   0:00 grep --color=auto httpd
 
-
 一般操作规律
         移动的文件,原有的上下文属性不变    
         复制的文件,自动继承目标位置的上下文  自动继承父目录的上下文
 
 用户 角色 访问类型 选项
 system_u:object_r:net_conf_t:s0  
-
 
 [root@host50 ~]# vim 10.txt
 [root@host50 ~]# ls -ldZ /root/
@@ -177,6 +175,449 @@ dr-xr-x---. root root system_u:object_r:admin_home_t:s0 /root/
 -rw-r--r--. root root unconfined_u:object_r:admin_home_t:s0 /var/www/html/10.txt
 [root@host50 ~]# ls -ldZ /var/www/html/
 drwxr-xr-x. root root system_u:object_r:httpd_sys_content_t:s0 /var/www/html/
+
+修改文件的访问类型:(chcon -t修改类型   -R递归修改是文件夹)
+[root@host50 ~]# chcon -t httpd_sys_content_t /var/www/html/10.txt  修改类型
+[root@host50 ~]# chcon -R -t httpd_sys_content_t /var/www/html/     递归修改类型
+恢复访问类型:(restorecon  -t修改类型   -R递归修改是文件夹)
+[root@host50 ~]# ls -lZ /var/www/html/11.html 
+-rw-r--r--. root root unconfined_u:object_r:admin_home_t:s0 /var/www/html/11.html 
+[root@host50 ~]# restorecon /var/www/html/11.html                    恢复文件类型
+[root@host50 ~]# ls -lZ /var/www/html/11.html 
+-rw-r--r--. root root unconfined_u:object_r:httpd_sys_content_t:s0 /var/www/html/11.html
+自动还原所有文件的标签:
+[root@host50 ~]# touch /.autorelabel            重启之后全部还原
+[root@host50 ~]# reboot
+
+
+  SELINUX布尔值(就是功能开关)
+查看布尔值:getsebool
+[root@host50 ~]# getsebool -a   查看所有布尔值
+[root@host50 ~]# getsebool -a | grep ftp   查看ftp服务的
+
+在50主机运行ftp服务,要求如下:允许匿名用户可以上传下载文件,对/var/ftp/share装vsftp包
+[root@host50 ~]# mkdir /var/ftp/share
+[root@host50 ~]# chmod o+w /var/ftp/share
+[root@host50 ~]# vim /etc/vsftpd/vsftpd.conf
+  29 anon_upload_enable=YES
+[root@host50 ~]# systemctl restart vsftpd
+[root@host50 ~]# cp /etc/passwd /var/ftp/share/
+
+51上登录ftp装ftp包
+[root@host51 ~]# ftp 192.168.4.50
+ftp
+直接回车
+ftp> pwd
+ftp> ls
+ftp> get passwd   下载
+ftp> lcd /etc    切换本机的/etc目录
+ftp> put shadow   上传至50ftp上文件
+
+get  下载
+lcd 切换本机目录
+put 上传
+
+修改ftp的布尔值,查看配置文件vim /etc/vsftpd/vsftpd.conf的29行有两项值可做参考,修改布尔值
+[root@host50 share]# setsebool -P ftpd_anon_write=on    -P是永久生效
+[root@host50 share]# setsebool -P ftpd_full_access=on
+
+查看日志排错
+修改httpd的默认端口80为8070
+[root@host50 ~]# systemctl restart httpd
+[root@host50 ~]# yum list | grep shoot
+[root@host50 ~]# yum -y install setroubleshoot*
+[root@host50 ~]# reboot
+[root@host50 ~]# systemctl restart httpd
+[root@host50 ~]# cat /var/log/messages | grep setroubleshoot
+[root@host50 ~]# grep setroubleshoot /var/log/messages | tail -1
+[root@host50 ~]# sealert -l 3a1c4b74-d872-493a-aed3-d8a962127286
+[root@host50 ~]# semanage port -a -t PORT_TYPE -p tcp 8070
+[root@host50 ~]# semanage port -a -t http_port_t -p tcp 8070
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                      day2 加密解密 入侵检测  扫描与抓包
+一、加密与解密
+   对称加密: 加密和解密用筒体个密钥  DES AES
+   非对称加密:加密解密用不同的密钥(公钥 私钥) RSA DSA
+是要在解密手里
+
+    文件的完整性校验信息摘要:基于输入的信息生成长度较短,位数固定的散列值  
+   用于信息校验:Hash---MD5 SHA
+[root@host50 ~]# md5sum /etc/passwd                针对文件和安装包
+98c46a3605cce3fe9826c45e1d9dad14  /etc/passwd
+[root@host50 ~]# useradd ll
+[root@host50 ~]# md5sum /etc/passwd
+c83bc9d40e16d22795d6323e7eeef36a  /etc/passwd
+[root@host50 ~]# userdel -r ll
+[root@host50 ~]# md5sum /etc/passwd
+98c46a3605cce3fe9826c45e1d9dad14  /etc/passwd
+[root@host50 ~]# ls /root/ | md5sum                针对目录
+
+加解密GPG工具
+使用GPG,
+(1)GPG对称加/解密(用户uesra到userb解密)
+[usera@room9pc01 ~]$ echo 22222 > test.txt
+[usera@room9pc01 ~]$ gpg -c test.txt    (加密123456)
+[usera@room9pc01 ~]$ mv test.txt.gpg /mnt/
+
+[userb@room9pc01 ~]$ gpg -d /tmp/test.txt.gpg (解密123456)
+[userb@room9pc01 ~]$ gpg -d /tmp/test.txt.gpg > ~/a.txt
+
+(2)GPG非对称加/解密
+  userb:
+       1 创建密钥对文件
+      [userb@room9pc01 ~]$ gpg --gen-key
+        回车
+        回车
+        回车
+      y
+       真实姓名:userb  随便写一个但是要记住
+      xxx@163.com
+      dddd
+        密码 1234567890
+        创建公钥私钥成功
+      [userb@room9pc01 ~]$ ls ~/.gnupg/     查看创建的公钥私钥对
+      [userb@room9pc01 ~]$ gpg --list-keys
+      [userb@room9pc01 ~]$rm -rf /home/userb/.gnupg
+     2 导出公钥 并共享公钥对
+      [userb@room9pc01 ~]$ gpg -a --export > userb.pub  导出公钥并移动到公共目录
+      [userb@room9pc01 ~]$ mv userb.pub /tmp/
+  usera:
+       1 导入公钥
+        [usera@room9pc01 ~]$ gpg --import /tmp/userb.pub
+        [usera@room9pc01 ~]$ ls ~/.gnupg/
+       2 使用公钥 并共享文件
+        [usera@room9pc01 ~]$ gpg -e -r userb(创建密钥的真实姓名) b3.txt  使用公钥创建共享文件
+        [usera@room9pc01 ~]$ mv b3.txt.gpg /tmp/
+  userb:
+       使用私钥解密
+      [userb@room9pc01 ~]$ gpg -d /tmp/b3.txt.gpg > ~/b3.txt (输入密码)
+     
+(3)GPG数字签名(验证数据完整性)
+ userb上私钥进行签名,签名那一个的文件信息
+    [userb@room9pc01 ~]$ gpg -b a.txt 
+    [userb@room9pc01 ~]$ mv a.txt* /tmp/
+
+ usera上进行验证数据,就是进行数据校验(需要有公钥,有数据)
+    [usera@room9pc01 ~]$ gpg --import /tmp/userb.pub   导入公钥 
+    [usera@room9pc01 ~]$ gpg --verify /tmp/a.txt.sig   进行校验
+二、AIDE入侵检测系统(只是检测,没有阻止功能)
+  软件是:aide  
+  [root@host50 ~]# which aide
+  [root@host50 ~]# yum -y install aide
+  
+  [root@host50 ~]# vim /etc/aide.conf 
+  [root@host50 ~]# sed -i '99,312s/^/#/' /etc/aide.conf
+  [root@host50 ~]# vim +98 /etc/aide.conf          99后面开始检测的内容,全注释,自己加一行/root/
+  [root@host50 ~]# aide --init
+  [root@host50 ~]# ls /var/lib/aide/
+  [root@host50 ~]# mv /var/lib/aide/aide.db.new.gz /opt/            备份检测之前的数据
+  [root@host50 ~]# cp /opt/aide.db.new.gz /var/lib/aide/aide.db.gz  检测到的数据会与.gz文件做对比
+  [root@host50 ~]# aide --check  开始检测
+
+三、扫描与抓包
+    3.1 扫描
+       为什么扫描:发现漏洞,进行修复或者进行攻击
+       常用的扫描方式:Scan  Sniff Capture
+       扫描工具:NMAP 
+      [root@room9pc01 ~]# yum -y install nmap
+      [root@room9pc01 ~]# nmap -sP 172.40.58.0/24  扫描IP段
+      [root@room9pc01 ~]# nmap  172.40.58.75      默认扫描TCP
+      [root@room9pc01 ~]# nmap -A  172.40.58.144      全面扫描
+      [root@room9pc01 ~]# nmap -p 3306,21  172.40.58.144 扫描端口  在加-n是加快速度
+      [root@room9pc01 ~]# nmap -n -p 3306,21  172.40.58.144
+      [root@room9pc01 ~]# nmap -sS -n -p 3306,21  172.40.58.144,73  半开扫描
+      [root@room9pc01 ~]# man nmap
+     半开扫描,不给服务器回2次握手
+ 
+    3.2 抓包tcpdump
+     [root@room9pc01 ~]#tcpdump 默认一直抓,
+     [root@room9pc01 ~]# tcpdump -i eth0 -c 2 -A -w file1.cap  在eth0口抓2个包保存在file1.cap文件 -A转换ACSII码,以方便阅读,更加详细阅读
+     [root@room9pc01 ~]# tcpdump -r -A file1.cap               读抓取的包
+       条件抓包:
+        -类型:host net port portrange
+        -方向:src dst
+        -协议:tcp udp ip wlan arp
+        -多条件组合:and or not
+         [root@room9pc01 ~]# tcpdump -i eth0 icmp and src host 172.40.58.117   筛选IP为117的
+              tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+              listening on eth0, link-type EN10MB (Ethernet), capture size 262144 bytes
+              09:40:46.841081 IP 172.40.58.117 > room9pc01.tedu.cn: ICMP echo reply, id 12934, seq 34, length 64
+              09:40:47.842236 IP 172.40.58.117 > room9pc01.tedu.cn: ICMP echo reply, id 12934, seq 35, length 64
+              09:40:48.843486 IP 172.40.58.117 > room9pc01.tedu.cn: ICMP echo reply, id 12934, seq 36, length 64
+         [root@room9pc01 ~]# tcpdump -i eth0 -c 2 tcp and port 21   FTP协议
+         [root@room9pc01 ~]# tcpdump -i eth0 -c 2 tcp and port  22 and host 172.40.58.117   SSH协议
+         [root@room9pc01 ~]# tcpdump -i eth0 icmp and host 172.40.58.119 or host 172.40.58.118   只抓协议ip为119的包和117的所有协议包
+         [root@room9pc01 ~]# tcpdump -i eth0 icmp and \( host 172.40.58.119 or host 172.40.58.118 \) 119和117的ip包
+         [root@room9pc01 ~]# tcpdump -i eth0 \(icmp or tcp\) and host 172.40.58.117   两种协议的包
+           
+            图形抓包:wireshark
+         [root@host59 ~]# yum list | grep wireshark
+         [root@host59 ~]# yum list | grep wireshark-gnome
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                      day2 服务安全 
+
+一、系统审计
+    记录可能发生在系统上的事件
+     软件audit
+[root@host59 ~]# systemctl start auditd
+[root@host59 ~]# systemctl enable  auditd
+[root@host59 ~]# systemctl status auditd
+    查看审计规则:[root@host59 ~]# auditctl -l 查看规则  -s 状态  -D删除所有规则
+    定义审计规则:
+     -w 审计的文件或者目录
+     -p 权限rwxa  a是属性修改操作
+     -k方便识别那些规则生成特定的日志项
+    临时定义:
+[root@host59 ~]# auditctl -w /etc/passwd/ -p wa -k passwd_change    //
+[root@host59 ~]# auditctl -w /etc/selinux/ -p wa -k selinux_change  //
+[root@host59 ~]# auditctl -w /usr/sbin/fdisk -p x -k disk_partition //
+    永久定义:
+[root@host59 ~]# vim /etc/audit/rules.d/audit.rules 
+   -w /etc/selinux -p wa -k selinux_change
+   -w /etc/passwd -p wa -k passwd_change
+   -w /usr/sbin/fdisk -p x -k disk_partition
+审计日志:查看创建的规则日志
+[root@host59 ~]# cat /var/log/audit/audit.log
+
+进行操作,查看创建的每个规则的违规记录的日志(进行了什么操作,规则会记录下来)
+[root@host59 ~]# fdisk -l
+[root@host59 ~]# useradd xixi
+[root@host59 ~]# ausearch -k passwd_change        ausearch根据条件过滤审计日志
+[root@host59 ~]# ausearch -k disk_partition       
+[root@host59 ~]# aureport                         aureport生成审计报告
+
+二、服务安全
+  1.1 网站安全
+ [root@host59 nginx-1.12.2]# yum -y install pcre-devel zlib-devel gcc
+ [root@host59 nginx-1.12.2]# ./configure
+ [root@host59 nginx-1.12.2]#make && make install
+ [root@host59 nginx-1.12.2]# mkdir /usr/local/nginx/html/gamedir
+ [root@host59 nginx-1.12.2]# echo aaa > /usr/local/nginx/html/gamedir/a.html
+ [root@host59 nginx-1.12.2]# echo bbb > /usr/local/nginx/html/gamedir/b.html
+
+  nginx安全配置: 不禁web用会列出所有页面列表访问所有源代码
+  [root@host59 nginx-1.12.2]# vim /usr/local/nginx/conf/nginx.conf
+      server{
+            autoindex on;
+              }
+  [root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx -s stop
+  [root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx 
+  [root@host59 nginx-1.12.2]# firefox http://192.168.4.59/gamedir/
+ 停掉服务,禁止该模块\
+  [root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx -s stop
+  [root@host59 nginx-1.12.2]# ./configure --help | grep autoindex
+  [root@host59 nginx-1.12.2]# ./configure --without-http_autoindex_module
+  [root@host59 nginx-1.12.2]# make && make install
+  [root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx
+
+[root@host59 nginx-1.12.2]# curl -i http://192.168.4.59/gamedir/a.html   -i会显示nginx的版本信息 不安全所以要隐藏该版本
+[root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx -s stop
+[root@host59 nginx-1.12.2]# vim +48 src/http/ngx_http_header_filter_module.c
+       static u_char ngx_http_server_string[] = "Server: IIS" CRLF;
+       static u_char ngx_http_server_full_string[] = "Server: IIS" CRLF;
+       static u_char ngx_http_server_build_string[] = "Server: IIS" CRLF;
+[root@host59 nginx-1.12.2]# ./configure --without-http_autoindex_module
+[root@host59 nginx-1.12.2]# make && make install
+[root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx
+
+  3 限制并发  限制同一个源IP访问的次数,降低DDos攻击风险
+]# /usr/local/nginx/sbin/nginx -s stop
+
+]# /usr/local/nginx/conf/nginx.conf
+http{
+   limit_req_zone $binary_remote_addr zone=one:10m rate=1r/s;
+	server {
+            limit_req zone=one burst=5;
+:wq
+
+]# /usr/local/nginx/sbin/nginx
+
+]# ab  -c 10 -n 10 http://192.168.4.59/
+]# ab  -c 100 -n 100 http://192.168.4.59/
+  4 拒绝非法访问
+[root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx -s stop
+[root@host59 nginx-1.12.2]# vim /usr/local/nginx/conf/nginx.conf
+server {
+        if ( $request_method !~ ^(GET|POST)$ ){
+             return 444;
+           }
+}
+[root@host59 nginx-1.12.2]# /usr/local/nginx/sbin/nginx 
+[root@host59 nginx-1.12.2]# curl -i -X HEAD http://localhost
+curl: (52) Empty reply from server
+[root@host59 nginx-1.12.2]# curl -i -X GET http://localhost
+   5 防止buffer溢出
+  http {
+			client_body_buffer_size  1K;
+			client_header_buffer_size 1k;
+			client_max_body_size 16k;
+			large_client_header_buffers 4 4k;
+
+   tocat: 
+    ]# yum -y  install java-1.8.0-openjdk
+    9 tar -zxvf apache-tomcat-8.0.30.tar.gz 
+   11  mv apache-tomcat-8.0.30 /usr/local/tomcat
+   12  ls /usr/local/tomcat/
+   13  ls /usr/local/tomcat/lib/
+   14  ls /usr/local/tomcat/bin/
+   15  /usr/local/tomcat/bin/startup.sh 
+   16  netstat -utnlp  | grep  :8080
+
+]# echo 123  > /usr/local/tomcat/webapps/ROOT/test.html
+]# curl  http://localhost:8080/test.html
+
+[root@svr7 tomcat]# yum -y install java-1.8.0-openjdk-devel
+[root@svr7 tomcat]# cd lib/  ;    jar -xf catalina.jar
+[root@svr7 tomcat]# vim org/apache/catalina/util/ServerInfo.properties //修改内容
+[root@svr7 tomcat]# vim  +69  /usr/local/tomcat/conf/server.xml
+<Connector port="8080" protocol="HTTP/1.1"
+connectionTimeout="20000"  redirectPort="8443" server="jacob" />
+
+    
+[root@host59 lnmp_soft]# curl -I http://localhost:8080/test.html   显示头部信息 显示版本信息
+[root@host59 lnmp_soft]# curl -I http://localhost:8080/            显示头部信息 显示版本信息
+修改主配置文件,隐藏版本信息
+
+  删除默认的测试页面	
+        ]# rm -rf  /usr/local/tomcat/webapps/*
+
+        降权启动
+   69  useradd tomcat
+   70  chown -R tomcat:tomcat /usr/local/tomcat/
+   71  su - -c "/usr/local/tomcat/bin/startup.sh" tomcat 
+   80  ps aux  | grep  java
+
+
+  
+  1.2 数据库服务安全
+    [root@host59 nginx-1.12.2]# mysql_secure_installation  初始化安全脚本,禁止匿名用户登录,一路回车Y
+    密码安全:修改密码
+   [root@host59 nginx-1.12.2]# mysqladmin -uroot -p123456 password '654321'
+    MariaDB [(none)]> set password=password("123456");
+    MariaDB [(none)]> set password for root@"localhost"=password("123456");
+    mysql> alter user root@"localhost" identified by "123qqq...A";
+
+    MariaDB [(none)]> update mysql.user set password=password("654321") where host="localhost" and user="root";
+    MariaDB [(none)]> flush privileges;
+  1.3 历史记录里会存放有自己的记录密码   把这两个文件删除掉 一个是mysql下输入的命令,一个是在linux系统下输入的命令
+    [root@host59 nginx-1.12.2]# cat /root/.mysql_history 
+    [root@host59 nginx-1.12.2]# cat /root/.bash_history 
+    [root@host59 nginx-1.12.2]# grep 1000 /etc/profile    显示记录历史命令显示的行数
+      HISTSIZE=1000
+  1.4 备份 数据库有完全备份和增量备份   
+  1.5 数据安全都是用网站加密的ssl或者ssh加密数据传输
+
+三、
+  创建补丁
+  打补丁
+  补丁文件没有路径的时候,就用patch -p0 < test.patch
+四、
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+####################################################################################################################################
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                         day6 防火墙 redhat6以下的  iptables 与firewalld调用的还是iptables
+1 iptables防火墙  隔离保护作用
+     
+
+    ACCEPT:允许通过/放行
+    DROP:直接丢弃,不给出任何回应
+    REJECT  拒绝通过
+    log 记录日志,传给下一条规则
+
+   iptables组成:4表(功能)、5链(ip包传输的方向)
+   4表:
+    1 raw表      状态跟踪表    prerouting output
+    2 mangle表  包标记表      prerouting postroutin input output forwar
+    3 nat表      地址转换表    prerouting postroutin  output
+    4 filter表  过滤表        input output forwar
+   5链:
+    input  进的包(链)
+    output 出的包(链)
+    forwar 数据包经过防火墙转发
+    postroutin 路由后 到达防火墙已经选择的目标主机的路径做nat
+    prerouting 路由前 到达防火墙还没有选择目标主机的路径,然后有防火墙来选择
+[root@hostb ~]# iptables -L         查看默认表内容有什么链有什么规则  默认filter表
+[root@hostb ~]# iptables -t nat -L  查看nat表的链有什么规则
+[root@hostb ~]# iptables -L --line-numbers  给表中链的规则加编号
+[root@hostb ~]# iptables -nL --line-numbers  以数字形式显示地址  端口等信息
+
+2 filter表控制
+   基本用法:iptables [-t 表名] 选项 [链名] [条件] [-j 目标操作]
+    [root@hostb ~]# iptables -F 清除filter表规则
+    [root@hostb ~]# iptables -t nat -F
+    [root@hostb ~]# iptables -t mangle -F
+    [root@hostb ~]# iptables -t raw -F	
+    [root@hostb ~]# iptables-save > /etc/sysconfig/iptables  永久生效保存这个文件里
+  处理动作(当到达防火墙服务器)
+[root@hostb ~]# iptables -t filter -A INPUT -p tcp --dport 22 -j ACCEPT 过滤表的入方向对于tcp端口号为22的数据包允许通过
+[root@hostb ~]# iptables -t filter -nL --line-numbers                   查看表内规则
+[root@hostb ~]# iptables -t filter -P INPUT DROP                        设置filter表的默认规则为丢弃
+[root@hostb ~]# iptables -t filter -nL --line-numbers                   查看默认规则
+[root@hostb ~]# iptables-save > /etc/sysconfig/iptables                 保存配置
+
+http的进不来
+[root@hostb ~]# systemctl stop iptables
+[root@hostb ~]# echo 123 > /var/www/html/a.html
+[root@hostb ~]# systemctl start httpd
+[root@hostb ~]# curl http://192.168.4.92/a.html
+123
+[root@hostb ~]# systemctl start httpd
+[root@hostb ~]# curl http://192.168.4.92/a.html                            此时访问不了
+[root@hostb ~]# iptables -t filter -I INPUT -p tcp --dport 80 -j ACCEPT    放行http 80端口
+[root@hostb ~]# iptables -t filter -I INPUT -p tcp --dport 80 -s 192.168.4.92 -d 192.168.4.92 -j ACCEPT 
+[root@hostb ~]# iptables -t filter -nL --line-numbers
+[root@hostb ~]# iptables -t filter -A INPUT -p icmp -j ACCEPT              放行ping包
+[root@hostb ~]# iptables-save > /etc/sysconfig/iptables
+B主机可以ping其它主机,但是其它主机ping不通B主机
+request 请求包
+reply   回应包
+[root@hostb ~]# iptables -t filter -D INPUT 4                           删除规则
+[root@hostb ~]# iptables -t filter -A INPUT -p icmp --icmp-type echo-reply -j ACCEPT   放行reply报文,阻止request报文,b能ping通别人,别人不能ping通自己
+[root@hostb ~]# iptables-save > /etc/sysconfig/iptables
+[root@hostb ~]# iptables -t filter -P INPUT ACCEPT   修改默认
+[root@hostb ~]# iptables -t filter -F                清空配置
+
+网络型防护
+[root@hostb~]# exho "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf  开启内核路由功能
+[root@hosta ~]# ping 192.168.2.93                                    开启了路由,所以a ping通 c
+[root@hostb ~]# iptables -t filter -P FORWARD DROP               修改默认配置
+[root@hostb ~]# iptables -t filter -A FORWARD -p icmp -j ACCEPT
+[root@hostb ~]# iptables -t filter -nL --line-numbers
+[root@hostb ~]# iptables-save > /etc/sysconfig/iptables             保存
+c访问a的web不能访问 放行web的
+b可以抓包查看[root@hostb ~]# tcpdump -i eth1 tcp port 80
+[root@hostb ~]# iptables -t filter -A FORWARD -p tcp --dport 80 -j ACCEPT  放行目的端口80
+[root@hostb ~]# iptables -t filter -A FORWARD -p tcp --sport 80 -j ACCEPT  放行源端口80
+c访问a的web可以访问
+放行ssh的
+[root@hostb ~]# iptables -t filter -A FORWARD -p tcp --dport 22 -j ACCEPT 
+[root@hostb ~]# iptables -t filter -A FORWARD -p tcp --sport 22 -j ACCEPT 
+
+3 扩展匹配
+    * MAC地址 
+        [root@hostb ~]# iptables -t filter -I FORWARD 3 -p icmp -m mac --mac-source 52:54:00:bf:44:f3 -j DROP
+          a ping不通c  c也ping不通a
+     * 多端口  一次加多个端口
+      [root@hostb ~]# iptables -t filter -A FORWARD -p tcp -m multiport --dports 22,80 -j ACCEPT 
+      [root@hostb ~]# iptables -t filter -A FORWARD -p tcp -m multiport --sports 22,80 -j ACCEPT 
+      [root@hostb ~]# iptables -t filter -D FORWARD 2
+      [root@hostb ~]# iptables -t filter -D FORWARD 2
+      [root@hostb ~]# iptables -t filter -D FORWARD 2
+      [root@hostb ~]# iptables -t filter -D FORWARD 2
+    * IP范围匹配
+      [root@hostb ~]# iptables -t filter -A FORWARD -p icmp -m iprange --src-range 192.168.4.90-192.168.4.95 -j ACCEPT
+      [root@hostb ~]# iptables -t filter -A FORWARD -p icmp -m iprange --dst-range 192.168.4.90-192.168.4.95 -j ACCEPT
+
+4 nat表典型应用(让多台私有IP地址主机共享同一个公网IP地址 上网)
+[root@hostb ~]# iptables -t nat -A POSTROUTING -s 192.168.2.0/24 -p tcp --dport 80 -j SNAT --to-source 192.168.4.92  路由后
+或公网IP是动态的要用[root@hostb ~]# iptables -t nat -A POSTROUTING -s 192.168.2.0/24 -o eth0 -p tcp --dport 80 -j MASQUERADE
+[root@hostb ~]# iptables-save > /etc/sysconfig/iptables
+
 
 
 
