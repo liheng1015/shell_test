@@ -1,0 +1,490 @@
+云平台部署与管理、大型架构 外网:git clone git://43.254.90.134/nsd1905.git   达内网:git clone git://172.40.53.65/nsd1905.git
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+##################################################################################################################################################3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                       day1 
+mount 只能挂载块设备
+losetup 做块设备
+yum 自己创找的yum源.pgp=0.第三方yum源需要gpg检测报的安全
+baseurl=repoadta路径.
+真机#git clone git://172.40.53.65/nsd1905.git
+真机#git pull       更新git
+#base-vm db1       创建虚拟机
+#irsh list --all   显示所有
+#virsh list        显示正运行
+#virsh start node1   reboot/shutdown
+#destroy              强制停止虚拟机
+#virsh undefine 1     取消虚拟主机
+#virsh console 11     连接虚拟机终端\
+  eip
+ps -efww 运行当前所有程序
+#virsh domblklist db1  查看虚拟机硬盘信息
+#virsh edit   db1       修改虚拟机的配置 (切记先关机在开机才生效)
+#virsh domiflist  db1  查看虚拟网卡信息
+
+qemu-img 命令
+#qemu-img create -b .node_base.qcow2 -f qcow2 nsd1905.img 20G  创建磁盘,也就是前端
+#qemu-img info db1.img      查看磁盘信息
+#qemu-img info tedu_node30.img 
+
+
+虚拟化所以需要安装4个软件:
+1 -virt-install 系统安装工具
+2 -virt-manager 图形管理工具
+3 -virt-v2v     虚拟机迁移工具
+4 -virt-p2v     物理机迁移工具
+#yum -y install qemu-kvm libvirt-daemon libvirt-client libvirt-daemon-driver-qemu
+
+虚拟机组成:
+  最上层 libvirt    是一个管理工具 管理程序
+  中间层 qemu       系统设备方仿真配置文件(通过这个命令定义设备内存等/etc/libvirt/qemu)
+  底层 kernel  kvm内核模块  内核虚拟化模块  
+通过配置文件生成libvirt命令,调用底层qemu命令和kvm内核模块
+bin 程序文件
+etc配置文件 虚拟机的配置文件:
+/etc/libvirt/qemu
+
+var数据文件 虚拟机的硬盘文件:
+/var/lib/libvirt/images
+
+
+虚拟机磁盘管理:qemu-img磁盘管理命令创建出来的前端盘
+镜像盘类型:
+RAW
+QCOW2
+前端盘:空的会从后端盘返回,前段盘有数据,会直接返回给客户
+后端盘:操作系统数据
+
+#cd /var/lib/libvirt/images
+#qemu-img create -b .node_base.qcow2 -f qcow2 nsd1905.img 20G   创建前端盘 -b使用后端盘模板 -f文件格式
+
+创建一个虚拟机过程:
+ 1 创建前端盘
+#cd /var/lib/libvirt/images
+#qemu-img create -b .node_base.qcow2 -f qcow2 nsd1905.img 20G  创建前端盘
+#qemu-img info nsd1905.img                                     查看前端盘
+ 2 创建xml配置文件
+  #vim /etc/libvirt/qemu/nsd1905.xml
+         <name>nsd1905</name>
+         <source file='/var/lib/libvirt/images/nsd1905.img'/>
+   #sed 's,node,nsd1905' nsd1905.xml > /etc/libvirt/qemu/nsd1905.xml
+ 3 创建虚拟机
+  #virsh define /etc/libvirt/qemu/nsd1905.xml 
+  #virsh edit nsd1905
+虚拟机扩容:
+   扩硬件磁盘50G:
+   [student@room9pc01 images]$ virsh domblklist nsd1905
+   [student@room9pc01 images]$ virsh blockresize --path /var/lib/libvirt/images/nsd1905.img --size 50G nsd1905  磁盘扩容50G
+   扩分区:
+   [student@room9pc01 images]$ virsh console nsd1905                         连接虚拟机
+   [root@localhost ~]# lsblk
+   [root@localhost ~]# growpart /dev/vda 1 (LANG=C)                          扩展主分区
+   [root@localhost ~]# df -h
+   扩系统:
+   [root@localhost ~]# xfs_growfs /dev/vda1                                  扩展文件系统
+   [root@localhost ~]# df -h
+ 
+
+云平台:
+IaaS云:即基础设施(一般的华为云和阿里云)即虚拟机
+包括私有云 公有云 混合云
+
+PaaS云:平台即服务(如淘宝电商网页)提供平台
+SaaS云:软件云 各个厂商做好的软件,放在一起.
+
+Openstack:是一套私有云的开源软件.一个开源的云计算管理平台,是一套IaaS解决方案
+什么是云计算: 把所有资源放资源池,把这个资源池共享进行用
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+##################################################################################################################################################3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                       day2  云计算部署与管理(openstack)
+Openstack:通过一个管理主机web网页,创建vm,其中就是使用nova来创建vm
+一个nova程序控制
+
+7大组件:
+Horizon:一个网页,管理Openstack服务
+nova:接收管理主机发的指令,一个程序
+Keystone:提供集中的授权和认证
+Quantum:网络互通,划分vxlan
+Glance:管理后端镜像,后端盘上传到这个,其它所有云主机都能看到,都能用
+Swift:对象存储,和ceph一起用
+Cinder:云主机上提供存储卷
+
+部署安装环境:
+   Openstack环境准备:
+        * 创建3台虚拟机
+       openstack 2cpu 6G内存 50G硬盘          
+          扩展内存
+        #virsh edit   db1       修改虚拟机的配置 (切记先关机在开机才生效)free -m
+       扩硬件磁盘50G:
+       [student@room9pc01 images]$ virsh domblklist nsd1905
+       [student@room9pc01 images]$ virsh blockresize --path /var/lib/libvirt/images/nsd1905.img --size 50G nsd1905  磁盘扩容50G
+       扩分区:
+       [student@room9pc01 images]$ virsh console nsd1905                         连接虚拟机
+       [root@localhost ~]# lsblk
+       [root@localhost ~]# growpart /dev/vda 1 (LANG=C)                          扩展主分区
+       [root@localhost ~]# df -h
+       扩系统:
+       [root@localhost ~]# xfs_growfs /dev/vda1                                  扩展文件系统
+       [root@localhost ~]# df -h
+         
+        * 配置NTP时间
+          #yum -y install chrony
+          #vim /etc/chrony.conf
+               server 192.168.1.254 iburst
+          #systemctl restart chronyd   
+          #chronyc sources -v
+        * 安装yum源(先挂载3个硬盘RHEL7-extras.iso RHEL7OSP-10.iso CentOS7-1804.iso)
+          真机#cd /linux-soft/04/openstack/
+          真机#mkdir /var/ftp/extras
+          真机#mkdir /var/ftp/openstack
+          真机#mount -t iso9660 -o ro,loop RHEL7-extras.iso /var/ftp/extras/
+          真机#mount RHEL7OSP-10.iso /var/ftp/openstack/
+
+         (注:openstack nova01和nova02都需要cp一份openstack.repo文件)
+       [root@openstack ~]# vim /etc/yum.repos.d/openstack.repo  
+         [extras]
+         name=extras
+         baseurl="ftp://192.168.1.254/extras"
+         enabled=1
+         gpgcheck=0
+
+         [openstack]
+         name=openstack
+         baseurl="ftp://192.168.1.254/openstack/rhel-7-server-openstack-10-rpms"
+         enabled=1
+         gpgcheck=0
+
+         [devtools]
+         name=devtools
+         baseurl="ftp://192.168.1.254/openstack/rhel-7-server-openstack-10-devtools-rpms"
+         enabled=1
+         gpgcheck=0
+      [root@openstack ~]# yum repolist        刷新列表
+      [root@openstack ~]# yum clean all       清除列表
+      [root@openstack ~]# yum repolist
+             repolist: 10,670                 加载到10670个包就ok了
+
+二 部署openstack
+     1 安装依赖包
+    [root@openstack ~]# yum -y install python-setuptools 
+
+    [root@nova01 ~]# yum -y install qemu-kvm libvirt-daemon-driver-qemu libvirt-daemon libvirt-client python-setuptools
+
+    [root@nova02 ~]# yum -y install qemu-kvm libvirt-daemon-driver-qemu libvirt-daemon libvirt-client python-setuptools 
+注意:
+是否卸载firewall和NetWorkManager
+检查网络IP是否静态
+主机名必须能够互相ping通
+检查配置主机yum源(4个10670)
+依赖包是否安装:[root@nova01 ~]# systemctl start libvirtd
+NTP时间是否同步:chronyc sources -v
+检查/etc/resolv.conf 不能有search开头的行
+     
+       2 配置packstack
+         [root@openstack ~]# yum -y install openstack-packstack
+        生成应答文件
+         [root@openstack ~]#packstack --gen-answer-file=answer.ini
+       3 修改应答文件
+42   swift模块
+45    计费
+49    计费
+53    计费
+75   NTP服务时间
+98   nova节点
+102   管理网络
+333   管理员密码
+840   网卡支持的协议
+910   虚拟交换机
+921   真机eth0,用作交换机的eth0连接外网网络
+1179  生成安装手册
+ 
+       4 根据应答文件部署openstack
+        [root@openstack ~]#packstack --answer-file=answer.ini
+修改内容才能打开web页面
+[root@openstack ~]# vim /etc/httpd/conf.d/15-horizon_vhost.conf
+WSGIApplicationGroup %{GLOBAL}
+
+命令行进入openstack 
+[root@openstack ~]# . keystonerc_admin  
+[root@openstack ~(keystone_admin)]# openstack user list    非交互
+[root@openstack ~(keystone_admin)]# openstack              交互
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+##################################################################################################################################################3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                       day3  云计算部署与管理2(openstack)
+bash解释器
+用户配额管理:
+
+    破解普通用户密码:
+[root@openstack ~]# . keystonerc_admin
+[root@openstack ~(keystone_admin)]# openstack user set --password c xx   重新设置xx用户密码为c
+创建项目:
+创建用户:
+云主机类型:添加的根磁盘不小于后端盘大小
+镜像:加一个后端盘镜像qcow2的
+网络:
+  外部网卡-flat
+  物理网络-physnet1
+
+在租户下创建:网络拓扑-->创建lan网络
+云主机数量:创建云主机
+
+
+云计算服务:
+nova01:openstack-nova
+
+添加浮动IP,然后在安全组加入口规则,all ICMP 
+
+
+扩容计算节点:
+还是先准备环境,与上一样,一般是yum源mount挂载重启之后不好使,nova2先
+修改文件:
+[root@openstack ~]# vim answer.ini
+    98        ,192.168.1.12
+    102       ,192.168.1.12
+
+[root@openstack ~]# packstack --answer-file answer.ini 直接扩容
+
+#watch -n 1 'virsh list --name' 每隔1秒执行一次
+
+screen
+ctrl a
+shift s
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+##################################################################################################################################################3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                   
+什么是容器:                                                               day3 Docker容器
+启服务就是隔断过程
+Cgroups  资源管理 外部限制一个程序
+NameSpace 进程隔离
+SElinux   安全
+
+
+物理机上把服务隔离开,限制内存使用
+什么是Docker:(没有操作系统,共享真机的库和文件系统)
+是完整的一套容器管理系统
+Docker提供了一组命令,让用户方便直接的使用容器技术,不需要过多关心底层内核技术
+
+安装部署: 
+内核3.0以上 RHEL7以上
+关闭防火墙
+
+安装软件:
+真机挂载:[student@room9pc01 openstack]$ mount RHEL7-extras.iso /var/ftp/
+
+docker1和2 配置yum:
+[root@docker1 ~]# vim /etc/yum.repos.d/local.repo
+[local_repo]
+name=CentOS-$releasever - Base
+baseurl="ftp://192.168.1.254/centos-1804"
+enabled=1
+gpgcheck=1
+
+[extras]
+name=extras
+baseurl="ftp://192.168.1.254/extras"
+enabled=1
+gpgcheck=0
+[root@docker1 ~]# scp /etc/yum.repos.d/local.repo root@192.168.1.30:/etc/yum.repos.d/
+[root@docker1 ~]# scp /etc/yum.repos.d/local.repo root@192.168.1.32:/etc/yum.repos.d/
+
+安装(1和2)docker:
+[root@docker1 ~]#yum -y install docker
+[root@docker1 ~]#systemctl start docker
+[root@docker1 ~]#systemctl enable docker
+[root@docker1 ~]# ifconfig
+
+1 镜像
+2 容器
+3 仓库
+
+镜像:相当于后端盘
+   docker是基于镜像启动
+    是启动容器的核心
+    采用分层设计
+        创建完前端盘之后,所使用的后端盘变成只读方式,不能在guestmount挂载,写数据,之后在最新的前端盘进行挂载更改数据 
+    使用快照cow技术
+    怎么看容器和镜像:docker images
+`   镜像仓库在官网https://hub.docker.com/
+        docker search busybox      搜索镜像
+        docker search centos
+        docker pull docker.io/busybox  下载镜像
+        docker push                    上传镜像 
+        docker images         查看镜像
+        [root@docker1 ~]# man docker-search  查看搜索的用法
+        [root@docker1 ~]# man docker-images  查看镜像的命令行用法
+        [root@docker1 ~]# docker save docker.io/busybox:latest -o busybox.tar    导出镜像生成tar包
+        [root@docker1 ~]# scp busybox.tar root@192.168.1.32:/root/
+
+        [root@docker2 ~]# docker load -i busybox.tar  导出镜像
+        [root@docker2 ~]# docker images    查看镜像
+启动镜像生成容器:[root@docker1 ~]# docker run -it docker.io/cento   s:latest  /bin/bash    相当于创建一个前端盘并进入
+[root@docker1 ~]# docker run -it docker.io/nginx:latest 非交互        进程起来了,只需web访问即可
+
+6大命令空间:
+uts 主机名命名空间
+net 网络命令空间与真机不一样
+pid pstree -p   或ps -ef不是属于该进程的空间被隔离
+user 用户命名空间/etc/password
+mount rm -rf 真机与容量文件系统都不一样
+ipc 信号向量kill
+
+/lib/systemd/system/sshd.server  开机启动文件
+[root@docker1 ~]# docker run -it docker.io/nginx:latest 非交互
+
+镜像基本命令:  
+[root@docker1 ~]# docker history docker.io/busybox                          查看镜像制作历史
+[root@docker1 ~]# docker inspect docker.io/centos:latest                    查看镜像底层信息
+[root@docker1 ~]# docker pull docker.io/busybox                             下载镜像
+[root@docker1 ~]# docker push                                               上传镜像 
+
+[root@docker2 ~]# docker save docker.io/busybox:latest -o busybox.tar       导出镜像生成tar
+[root@docker2 ~]# docker load -i busybox.tar                                导出镜像
+[root@docker2 ~]# docker search busybox                                     搜索镜像
+[root@docker2 ~]# docker tag docker.io/busybox xx/aa                        修改镜像名称及标签,相当于软连接
+[root@docker2 ~]# docker rmi xx/aa                                          删除镜像
+[root@docker2 ~]# docker images                                             在查看镜像列表
+
+容器基本命令
+[root@docker1 ~]# docker run -itd docker.io/centos:latest.  /bin/bash       创建新容器并运行  -d在后台运行  通过指定命令进入            
+[root@docker1 ~]# docker ps                                                 查看容器列表ps -a/-aq/-q    -aq列出所有容器列表id
+[root@docker1 ~]# docker stop 61fe188acc78                                  关闭容器
+[root@docker1 ~]# docker start 61fe188acc78                                 开启容器
+[root@docker1 ~]# docker restart 61fe188acc78                               重启容器
+
+[root@docker1 ~]# docker top 61fe188acc78                                   查看容器进程列表
+[root@docker1 ~]# docker inspect 61fe188acc78                               查看容器底层信息
+[root@docker1 ~]# docker rm 51db9b72a5d4                                    删除容器
+[root@docker1 ~]# docker rm $(docker ps -q)                                 批量删除
+[root@docker1 ~]# docker exec -it fe559888a8df /bin/bash                    进入容器 进入到子bash
+[root@docker1 ~]# docker attach fe559888a8df                              
+echo $$                                                                     查看当前进程号
+pstree -p
+
+Redhat       Debian
+Centos       ubuntu
+yum   =  apt-get
+rpm   =  dpkg               rpm -qa = dpkg -L nginx
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+##################################################################################################################################################3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                             day04 Docker持久化和网络架构
+commit生成后端盘:
+[root@docker1 ~]# docker commit fe559888a8df docker.io/myos:latest         commit创建镜像,就是用前端盘创建后端盘(在前端盘安装完软件之后生成后端盘)
+Dockerfile生成后端盘:
+[root@docker1 ~]#mkdir aa
+[root@docker1 ~]#cp cp /etc/yum.repos.d/local.repo .
+[root@docker1 aa]#vim Dockerfile 
+  FROM docker.io/centos:latest
+  RUN rm -f /etc/yum.repos.d/*
+  ADD local.repo /etc/yum.repos.d/local.repo
+  RUN yum -y install vim net-tools psmisc iproute
+[root@docker1 aa]# docker build -t test:latest /root/aa                   Dockerfile基础镜像创建后端盘
+
+
+[root@docker1 bb]# cat Dockerfile 
+FROM docker.io/myos:latest
+RUN yum -y install httpd
+ENV EnvironmentFile=/etc/sysconfig/httpd
+WORKDIR /var/www/html/
+ADD index.html index.html
+EXPOSE 80
+EXPOSE 443
+CMD ["/usr/sbin/httpd","-DFOREGROUND"]
+
+
+
+制作自定义镜像:
+1 创建镜像仓库(192.168.1.30)
+       [root@client ~]# yum repolist 
+       [root@client ~]# yum -y install docker-distribution.x86_64                           安装私有仓库
+       [root@client ~]# systemctl start docker-distribution.service 
+       [root@client ~]# systemctl enable docker-distribution.service 
+       [root@client ~]# http://192.168.1.30:5000/v2/_catalog
+       [root@client ~]# cat /etc/docker-distribution/registry/config.yml  仓库配置文件 
+       [root@client ~]# ls /var/lib/registry/                             仓库存储路径
+
+2 给镜像仓库上传镜像192.168.1.31上配置
+       [root@docker1 bb]# vim /etc/sysconfig/docker                          修改配置文件
+              ADD_REGISTRY='--add-registry 192.168.1.30:5000'                非加密方式访问仓库
+              INSECURE_REGISTRY='--insecure-registry 192.168.1.30:5000'      docker仓库地址
+       [root@docker1 bb]# docker stop  id                                    关闭所有容器
+       [root@docker1 bb]# systemctl restart docker                           重启服务
+       [root@docker1 bb]#docker tag docker.io/myos:latest 192.168.1.30:5000/myos:latest   修改标签(不修改标签上传不了,不能识别ip和端口号)
+       [root@docker1 bb]#docker tag http:tatest 192.168.1.30:5000/myhttp:latest            ..
+       [root@docker1 bb]#docker tag test:latest 192.168.1.30:5000/mytest:latest            ..
+       [root@docker1 bb]#docker push 192.168.1.30:5000/myos:latest                        上传镜像
+       [root@docker1 bb]#docker push 192.168.1.30:5000/mytest:latest                        ..
+       [root@docker1 bb]#docker push 192.168.1.30:5000/myhttp:latest                        ..
+
+3 所有客户机配置使用新的镜像仓库启用容器
+       [root@docker2 bb]# vim /etc/sysconfig/docker                          修改配置文件
+              ADD_REGISTRY='--add-registry 192.168.1.30:5000'                非加密方式访问仓库
+              INSECURE_REGISTRY='--insecure-registry 192.168.1.30:5000'      docker仓库地址
+       [root@docker2 bb]# docker stop  id                                    关闭所有容器
+       [root@docker2 bb]# systemctl restart docker                           重启服务
+  
+       [root@docker2 bb]# docker run -it 192.168.1.30:5000/myos:latest       远程启动镜像
+
+       [root@docker2 ~]# curl http://192.168.1.30:5000/v2/myhttp/tags/list   查看某一仓库标签
+       [root@docker2 ~]# curl http://192.168.1.30:5000/v2/_catalog           查看仓库中的镜像名称
+
+持久化存储:
+    docker容器不保持任何数据
+[root@docker1 bb]# docker run -itd -v /mnt/qq:/var/www/html http:tatest   -v选项映射磁盘到容器中
+
+NFS共享存储
+[root@client ~]#yum -y install nfs-utils.x86_64 
+[root@client ~]#mkdir /web_nfs
+  /web_nfs *(rw,no_root_squash)
+[root@client ~]#chmod 777 /web_nfs/
+[root@client ~]#echo 111 > /web_nfs/index.html
+[root@client ~]#systemctl restart nfs-server
+[root@client ~]#systemctl restart nfs-secure
+
+[root@docker1 ~]mount 192.168.1.30:/web_nfs /mnt/qq
+[root@docker1 ~]docker run -p 80:80 -itd -v /mnt/qq:/var/www/html http:tatest
+[root@docker1 ~]curl 192.168.1.31
+
+[root@docker2 ~]#mount 192.168.1.30:/web_nfs /mnt
+[root@docker2 ~]# docker run  -d -p 80:80 -v /mnt/qq:/usr/share/nginx/html -it 192.168.1.30:5000/mynginx:latest
+
+
+
+docker网络模型:
+docker network create --subnet=10.10.10.0/24 docker
+ifconfig
+docker network list
+docker network inspect docker
+docker run -it docker.io/myos:latest 
+ctrl+p+q
+docker run -it docker.io/myos:latest
+ctrl+p+q
+docker run -it --network=deoker docker.io/myos:latest
+ctrl+p+q
+docker run -it --network=deoker docker.io/myos:latest
+ctrl+p+q
+
+
+
+客户端访问容器内的资源:容器端口和宿主机端口绑定
+docker run -p 80:80 -itd -v /mnt/qq:/var/www/html http:tatest
+
+
+
+
+docker     == lib
+kubernetes == openstack
+
+
+
+
+
+
+
+
+
+
+
