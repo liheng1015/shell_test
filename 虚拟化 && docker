@@ -3,6 +3,7 @@
 ##################################################################################################################################################3
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                                        day1 
+rpm  --import  RPM-GPG-KEY-CentOS-7  导入公钥
 mount 只能挂载块设备
 losetup 做块设备
 yum 自己创找的yum源.pgp=0.第三方yum源需要gpg检测报的安全
@@ -52,6 +53,8 @@ var数据文件 虚拟机的硬盘文件:
 镜像盘类型:
 RAW
 QCOW2
+vdi
+vmdk
 前端盘:空的会从后端盘返回,前段盘有数据,会直接返回给客户
 后端盘:操作系统数据
 
@@ -100,6 +103,8 @@ Openstack:是一套私有云的开源软件.一个开源的云计算管理平台
                                                        day2  云计算部署与管理(openstack)
 Openstack:通过一个管理主机web网页,创建vm,其中就是使用nova来创建vm
 一个nova程序控制
+什么是Openstack:是一套私有云的开源软件.一个开源的云计算管理平台,是一套IaaS解决方案
+什么是云计算: 把所有资源放资源池,把这个资源池共享进行用
 
 7大组件:
 Horizon:一个网页,管理Openstack服务
@@ -108,7 +113,7 @@ Keystone:提供集中的授权和认证
 Quantum:网络互通,划分vxlan
 Glance:管理后端镜像,后端盘上传到这个,其它所有云主机都能看到,都能用
 Swift:对象存储,和ceph一起用
-Cinder:云主机上提供存储卷
+Cinder:云主机上提供块存储卷
 
 部署安装环境:
    Openstack环境准备:
@@ -117,7 +122,7 @@ Cinder:云主机上提供存储卷
           扩展内存
         #virsh edit   db1       修改虚拟机的配置 (切记先关机在开机才生效)free -m
        扩硬件磁盘50G:
-       [student@room9pc01 images]$ virsh domblklist nsd1905
+       [student@room9pc01 images]$ virsh domblklist nsd1905       查看虚拟机硬盘信息
        [student@room9pc01 images]$ virsh blockresize --path /var/lib/libvirt/images/nsd1905.img --size 50G nsd1905  磁盘扩容50G
        扩分区:
        [student@room9pc01 images]$ virsh console nsd1905                         连接虚拟机
@@ -186,22 +191,22 @@ NTP时间是否同步:chronyc sources -v
         生成应答文件
          [root@openstack ~]#packstack --gen-answer-file=answer.ini
        3 修改应答文件
-42   swift模块
-45    计费
-49    计费
-53    计费
-75   NTP服务时间
-98   nova节点
-102   管理网络
-333   管理员密码
-840   网卡支持的协议
-910   虚拟交换机
-921   真机eth0,用作交换机的eth0连接外网网络
-1179  生成安装手册
+42   swift模块   n
+45    计费         n
+49    计费         n
+53    计费         n
+75   NTP服务时间 192.168.1.254
+98   nova节点    192.168.1.11
+102   管理网络     192.168.1.10,192.168.1.11
+333   管理员密码  admin
+840   网卡支持的协议  flat,vxlan
+910   虚拟交换机       physnet1:br-ex
+921   真机eth0,用作交换机的eth0连接外网网络 br-ex:eth0
+1179  生成安装手册   n
  
        4 根据应答文件部署openstack
         [root@openstack ~]#packstack --answer-file=answer.ini
-修改内容才能打开web页面
+修改内容才能打开web页面 http://192.168.1.10/
 [root@openstack ~]# vim /etc/httpd/conf.d/15-horizon_vhost.conf
 WSGIApplicationGroup %{GLOBAL}
 
@@ -254,13 +259,15 @@ shift s
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ##################################################################################################################################################3
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                   
-什么是容器:                                                               day3 Docker容器
-启服务就是隔断过程
+                                                  day3 Docker容器
+什么是容器: 启服务就是隔断过程
+由以下几个内核技术组成:
 Cgroups  资源管理 外部限制一个程序
 NameSpace 进程隔离
 SElinux   安全
 
+容器优点: 比虚拟化技术更加简洁高效,传统虚拟机需要给每个虚拟机vm安装操作系统,容器使用的共享公共库和程序
+容器缺点: 隔离性没有虚拟化强,共用Linux内核,安全性有先天缺陷,SElinux难驾驭,监控容器和排错难度较大
 
 物理机上把服务隔离开,限制内存使用
 什么是Docker:(没有操作系统,共享真机的库和文件系统)
@@ -296,9 +303,9 @@ gpgcheck=0
 [root@docker1 ~]#systemctl enable docker
 [root@docker1 ~]# ifconfig
 
-1 镜像
-2 容器
-3 仓库
+1 镜像 生成镜像 pull下载
+2 容器 创建镜像 run创建
+3 仓库 自定义仓库把所有自己做好的后端盘放入镜像以便所有主机使用该镜像 commit生成后端盘
 
 镜像:相当于后端盘
    docker是基于镜像启动
@@ -318,12 +325,12 @@ gpgcheck=0
         [root@docker1 ~]# docker save docker.io/busybox:latest -o busybox.tar    导出镜像生成tar包
         [root@docker1 ~]# scp busybox.tar root@192.168.1.32:/root/
 
-        [root@docker2 ~]# docker load -i busybox.tar  导出镜像
+        [root@docker2 ~]# docker load -i busybox.tar  导入镜像
         [root@docker2 ~]# docker images    查看镜像
 启动镜像生成容器:[root@docker1 ~]# docker run -it docker.io/cento   s:latest  /bin/bash    相当于创建一个前端盘并进入
-[root@docker1 ~]# docker run -it docker.io/nginx:latest 非交互        进程起来了,只需web访问即可
+[root@docker1 ~]# docker run -it docker.io/ :latest 非交互        进程起来了,只需web访问即可
 
-6大命令空间:
+6大命名空间:
 uts 主机名命名空间
 net 网络命令空间与真机不一样
 pid pstree -p   或ps -ef不是属于该进程的空间被隔离
@@ -344,7 +351,7 @@ ipc 信号向量kill
 [root@docker2 ~]# docker load -i busybox.tar                                导出镜像
 [root@docker2 ~]# docker search busybox                                     搜索镜像
 [root@docker2 ~]# docker tag docker.io/busybox xx/aa                        修改镜像名称及标签,相当于软连接
-[root@docker2 ~]# docker rmi xx/aa                                          删除镜像
+[root@docker2 ~]# docker rmi xx/aa:latest                                   删除镜像
 [root@docker2 ~]# docker images                                             在查看镜像列表
 
 容器基本命令
@@ -366,13 +373,16 @@ pstree -p
 Redhat       Debian
 Centos       ubuntu
 yum   =  apt-get
-rpm   =  dpkg               rpm -qa = dpkg -L nginx
+rpm   =  dpkg               rpm -qa = dpkg -L nginx   
+dpkg -L apache2 = rpm -ql httpd           //列出软件包的详细信息
+dpkg -l = rpm -qa                         //列出所有已经安装的软件包
+dpkg -S apache2 = rpm -qf /usr/bin/vim    //验证文件属于的软件包
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ##################################################################################################################################################3
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                                              day04 Docker持久化和网络架构
 commit生成后端盘:
-[root@docker1 ~]# docker commit fe559888a8df docker.io/myos:latest         commit创建镜像,就是用前端盘创建后端盘(在前端盘安装完软件之后生成后端盘)
+[root@docker1 ~]# docker commit fe559888a8df docker.io/myos:latest   跟容器ID    commit创建镜像,就是用前端盘创建后端盘(在前端盘安装完软件之后生成后端盘)
 Dockerfile生成后端盘:
 [root@docker1 ~]#mkdir aa
 [root@docker1 ~]#cp cp /etc/yum.repos.d/local.repo .
@@ -385,16 +395,14 @@ Dockerfile生成后端盘:
 
 
 [root@docker1 bb]# cat Dockerfile 
-FROM docker.io/myos:latest
-RUN yum -y install httpd
-ENV EnvironmentFile=/etc/sysconfig/httpd
-WORKDIR /var/www/html/
-ADD index.html index.html
-EXPOSE 80
+FROM docker.io/myos:latest                      指定基础镜像
+RUN yum -y install httpd                        进入镜像执行命令
+ENV EnvironmentFile=/etc/sysconfig/httpd        设置变量
+WORKDIR /var/www/html/                          定义默认工作目录
+ADD index.html index.html                       复制文件到镜像
+EXPOSE 80                                       端口号
 EXPOSE 443
-CMD ["/usr/sbin/httpd","-DFOREGROUND"]
-
-
+CMD ["/usr/sbin/httpd","-DFOREGROUND"]          开机自启
 
 制作自定义镜像:
 1 创建镜像仓库(192.168.1.30)
@@ -443,7 +451,7 @@ NFS共享存储
 [root@client ~]#echo 111 > /web_nfs/index.html
 [root@client ~]#systemctl restart nfs-server
 [root@client ~]#systemctl restart nfs-secure
-
+客户端挂载并创建容器访问服务
 [root@docker1 ~]mount 192.168.1.30:/web_nfs /mnt/qq
 [root@docker1 ~]docker run -p 80:80 -itd -v /mnt/qq:/var/www/html http:tatest
 [root@docker1 ~]curl 192.168.1.31
@@ -468,21 +476,110 @@ docker run -it --network=deoker docker.io/myos:latest
 ctrl+p+q
 
 
-
 客户端访问容器内的资源:容器端口和宿主机端口绑定
 docker run -p 80:80 -itd -v /mnt/qq:/var/www/html http:tatest
 
 
 
-
 docker     == lib
 kubernetes == openstack
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+##################################################################################################################################################3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                             day05 破解密码
+1 查找admin_token号:/etc/keystone/keystone.conf里面的admin_token找到
+2 家目录下创建配置文件token,并把1找到的admin_token写入配置文件
+[root@openstack ~]# vim token
+    export OS_TOKEN=3cc67984e8ba442e8c024677f080be59
+    export OS_URL=http://127.0.0.1:35357/v2.0
+    export OS_INDETITY_API_VERSION=2
+3 重新加载配置文件并破解密码
+[root@openstack ~]# source token
+[root@openstack ~]# source ~/keystonerc_admin 
+[root@openstack ~(keystone_admin)]# openstack user set --password 新密码 用户名
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                      day06 大型数据架构及配置技术
+1 ansible是基于一款IT自动化和DevOps软件,实现了批量操作系统配置,批量程序部署,批量运行命令等功能(主机的集合,命令的集合)
+自动化部署,自动化管理,自动化云服务管理
+支持JSON等标准输出格式
+
+ansible的加载顺序:
+首先检测ANSIBLE_CONFIG变量定义的配置文件
+其次检查当前目录下的./ansible.cfg文件
+再次检查当前用户家目录下的~/ansible.cfg文件
+最后检查/etc/ansible/ansible.cfg文件
+
+环境准备:
+自定义yum
+[student@room9pc01 ~]$ cd /linux-soft/04/ansible/
+[student@room9pc01 ansible]$ cp * /var/ftp/ansible
+[student@room9pc01 ansible]$ cd /var/ftp/ansible
+[student@room9pc01 ansible]$ createrepo --update .    更新索引文件
+配置yum客户端安装ansible
 
 
+修改配置文件/etc/ansible/ansible.cfg
+[root@ansible ~]# vim /etc/ansible/ansible.cfg
+    14 inventory      = /etc/ansible/hosts   主机集合路径
+    61 host_key_checking = False             防止ssh输入yes进入
+添加主机集合:
+[root@ansible ~]# vim /etc/ansible/hosts
+[web]
+web[1:2]
 
+[db]
+db1
+db2 ansible_ssh_port=222                             更改端口
 
+[other]
+cache
 
+[app:children]                                         定义组
+web
+db
 
+[all:vars]
+ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件,适用与有多个密钥文件
+命令基础:
+    ansible 主机集合 -m 模块名称 -a 模块参数
+    [root@ansible ~]# ansible web --list-hosts    查看组成员
+    [root@ansible ~]# ansible all --list-hosts    列出所有组的所有主机 
+    [root@ansible ~]# ansible web -m ping -k      批量检测主机ssh是否可以连接 -k使用交互式登录密码,如果不用-k就需要免密登录
+
+     创建公私钥免密登录:
+    [root@ansible ~]# ssh-keygen -t rsa -b 2048 -N '' -f key  创建密钥 -f 私钥名字
+    [root@ansible .ssh]# ssh-copy-id -i key.pub web1
+    [root@ansible .ssh]# ssh -i key web1                      免密登录
+    [root@ansible ~]# ansible all -m ping                     检查所有
+
+批量管理配置:
+1 ansible-doc和ping模块
+   [root@ansible ~]# ansible all -m ping            ping的是ssh
+   [root@ansible ~]# ansible-doc -l                 列出所有模块
+   [root@ansible ~]# ansible-doc modulename         查看帮助
+2 command模块远程执行命令 uptime 系统负载不能启用bash进程 <>|&不能执行所以用shell模块
+   [root@ansible ~]# ansible web -m command -a 'uptime' 远程查看web的系统负载 -a是command的参数   
+3 shell模块    ansible 执行命令是二次解析，第一次在本机解析, 第二次在执行机器解析，需要第二次解析的变量要转移（\）
+   [root@ansible ~]# ansible db -m shell -a 'ps -ef | grep ssh'   
+4 script模块在本地写脚本,然后使用script模块批量执行
+   [root@ansible ~]# ansible web -m script -a './test.sh'
+5 copy模块
+[root@ansible ~]# ansible all -m copy -a 'src=/etc/resolv.conf dest=/etc/resolv.conf'    文件
+[root@ansible ~]# ansible all -m copy -a 'src=/etc/yum.repos.d dest=/etc/'               目录  yum.repos.d/是这个目录下的文件
+[root@ansible ~]# ansible db -m copy -a 'src=/root/my.cnf dest=/etc/'                    
+6 lineinfile|replace模块 用正则修改配置文件
+   [root@ansible ~]# ansible db -m lineinfile -a 'path="/etc/my.cnf" regexp="^binlog-format" line="binlog-fortmat=row"'  修改一行
+   [root@ansible ~]# ansible db -m shell -a 'grep "^binlog-fortmat" /etc/my.cnf'
+   
+   [root@ansible ~]# ansible db -m replace -a 'path="/etc/my.cnf" regexp="row$" replace=mixed""'                         修改只匹配的
+   [root@ansible ~]# ansible db -m shell -a 'grep "^binlog-fortmat" /etc/my.cnf'
+7 yum模块
+   [root@ansible ~]# ansible db -m yum -a 'name=mariadb-server state=installed'
+8 server模块启动服务
+   [root@ansible ~]# ansible db -m service -a 'name=mariadb state=started enabled=yes'
+9 setup模块
+   [root@ansible ~]# ansible cache -m setup   获取主机的信息
 
 
 
