@@ -86,7 +86,7 @@ vmdk
    扩系统:
    [root@localhost ~]# xfs_growfs /dev/vda1                                  扩展文件系统
    [root@localhost ~]# df -h
- 
+扩展内存:virsh edit logstash
 
 云平台:
 IaaS云:即基础设施(一般的华为云和阿里云)即虚拟机
@@ -499,7 +499,7 @@ kubernetes == openstack
 [root@openstack ~(keystone_admin)]# openstack user set --password 新密码 用户名
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-                                                                      day06 大型数据架构及配置技术
+                                                                      day06 大型数据架构及配置技术ansible
 1 ansible是基于一款IT自动化和DevOps软件,实现了批量操作系统配置,批量程序部署,批量运行命令等功能(主机的集合,命令的集合)
 自动化部署,自动化管理,自动化云服务管理
 支持JSON等标准输出格式
@@ -548,9 +548,9 @@ ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件
     [root@ansible ~]# ansible web -m ping -k      批量检测主机ssh是否可以连接 -k使用交互式登录密码,如果不用-k就需要免密登录
 
      创建公私钥免密登录:
-    [root@ansible ~]# ssh-keygen -t rsa -b 2048 -N '' -f key  创建密钥 -f 私钥名字
-    [root@ansible .ssh]# ssh-copy-id -i key.pub web1
-    [root@ansible .ssh]# ssh -i key web1                      免密登录
+    [root@ansible ~]# ssh-keygen -t rsa -b 2048 -N '' -f key  创建密钥 -f 私钥名字-N密码
+    [root@ansible .ssh]# ssh-copy-id -i key.pub web1          传公钥
+    [root@ansible .ssh]# ssh -i key web1                      免密登录要不就要用key的绝对路径
     [root@ansible ~]# ansible all -m ping                     检查所有
 
 批量管理配置:
@@ -569,17 +569,511 @@ ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件
 [root@ansible ~]# ansible all -m copy -a 'src=/etc/yum.repos.d dest=/etc/'               目录  yum.repos.d/是这个目录下的文件
 [root@ansible ~]# ansible db -m copy -a 'src=/root/my.cnf dest=/etc/'                    
 6 lineinfile|replace模块 用正则修改配置文件
-   [root@ansible ~]# ansible db -m lineinfile -a 'path="/etc/my.cnf" regexp="^binlog-format" line="binlog-fortmat=row"'  修改一行
+   [root@ansible ~]# ansible db -m lineinfile -a 'path="/etc/my.cnf" regexp="^binlog-format" line="binlog-fortmat=row"'  修改匹配上的整个一行
    [root@ansible ~]# ansible db -m shell -a 'grep "^binlog-fortmat" /etc/my.cnf'
    
    [root@ansible ~]# ansible db -m replace -a 'path="/etc/my.cnf" regexp="row$" replace=mixed""'                         修改只匹配的
    [root@ansible ~]# ansible db -m shell -a 'grep "^binlog-fortmat" /etc/my.cnf'
 7 yum模块
    [root@ansible ~]# ansible db -m yum -a 'name=mariadb-server state=installed'
-8 server模块启动服务
+8 service模块启动服务
    [root@ansible ~]# ansible db -m service -a 'name=mariadb state=started enabled=yes'
 9 setup模块
    [root@ansible ~]# ansible cache -m setup   获取主机的信息
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                      day06 大型数据架构及配置技术playbook
+ansible七种武器:
+第一种:ansible命令用于执行临时性的工作
+第二种:ansible-doc是ansible模块的文档说明,针对每个模块都有详细的说明及应用案例介绍,功能和linux系统man命令相似
+第三种:ansible-console为用户提供交互式工具
+第四种:ansible-galaxy从github上下载管理Roles的一款工具,与python的pip类似
+第五种:ansible-playbook通过读取先编好的playbook文件实现批量管理
+第六种:ansible-vault用于配置文件加密
+第七种:ansible-pull在配置大批量机器的场景下使用>2000台服务器
+* JSON是什么(就是字符串)
+    是JavaScript对象表示法,它是一种基于文本独立与语言的轻量级数据交换格式
+    单引号 小括号 中括号 大括号 冒号和逗号
+* json特性
+    是纯文本
+    具有"自我描述性"(人类可读)
+    具有层级结构
+    可通过JavaScirpt进行解析
+* JSON语法
+    -数据名称/值对中
+    -数据由逗号分割
+    -大括号保存对象
+    -中括号保存数组
+* json数据格式:名称/值对
+     例如:"nb":"Linux"
+      key:value键值对 名称/值对   
+["a","b",[1,2,3]]数组套数组
+json如:
+"大崔":"牛奔媳妇"
+"讲师":["牛奔","凯子"]
+复杂
+{"讲师":
+   [
+    {"姓名":"牛奔","爱好":"烫头"},
+    {"姓名":"凯子","爱好":"吃香蕉"}
+  ] 
+}
+
+* YAML是什么:是一个可读性高,用来表达数据序列的格式,也是一门语言
+* YAML基础语法
+YAML的结构通过空格来展示
+"- "减号空格数组
+": "冒号空格键值对
+YAML使用一个固定的缩进风格表示数据层级结构关系
+一般每个缩进级别由两个以上空格组成
+#表示注释
+* YAML的键值表示方法
+采用:分割
+: 后面必须有一个空格
+
+复杂YAML
+"讲师": 
+  - 
+    "姓名":"牛奔"
+    "爱好":"烫头"
+  - 
+    "姓名":"凯子"
+    "爱好":"吃香蕉"
+  - 
+    "姓名":"丁丁"
+    "爱好":"写书"
+  - 
+    "姓名":"凯子"
+    "爱好":"吃香蕉"
+
+* jinja2模板:
+ 
+
+* playbook是脚本用的是YAML语言 反复利用的命令
+练习1:ping命令脚本:指定主机,执行命令
+[root@ansible ~]# cat ping.yml 
+---
+- hosts: all
+  remote_user: root
+  tasks:
+    - ping:  
+[root@ansible ~]# ansible-playbook ping.yml
+练习2:所有web主机安装Apache,端口号8080,默认网页hellow world,启动服务开机自启.ansible-doc yum帮助查找如何写
+[root@ansible ~]# vi apache.yml
+---
+- hosts: all
+  remote_user: root
+  tasks:
+    - name: yum install apache
+      yum:
+        name: httpd
+        state: latest
+    - lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        regexp: '^Listen '
+        insertafter: '^#Listen '                如果没有匹配上正则,则在这个的正则行尾添加8080
+        line: 'Listen 8080'
+    - copy:
+        src: index.html
+        dest: /var/www/html/
+        owner: apache
+        group: apache
+        mode: 0644
+    - service:
+        name: httpd
+        state: started
+        enabled: yes
+练习3:创建用户l4并用vars做变量,
+[root@ansible ~]# vim user.yml
+---
+- hosts: all
+  remote_user: root
+  vars:
+    username: l4
+  tasks:
+    - name: create user "{{username}}"
+      user:
+        name: "{{username}}"
+    - shell: echo 123 |passwd --stdin "{{username}}"
+
+练习4:任意创建用户并使用密文加密,并使用变量过滤器password_hash加密用的
+[root@ansible ~]# cat user.yml 
+---
+- hosts: db
+  remote_user: root
+#  vars:
+#    username: l4
+  tasks:
+    - name: create user "{{username}}"
+      user:
+        name: "{{username}}"
+        group: users
+        password: "{{'123'|password_hash('sha512')}}"   密文加密
+#    - shell: echo 123 |passwd --stdin "{{username}}" 
+[root@ansible ~]# cat /etc/login.defs  显示创建z用户的默认配置
+[root@ansible ~]# ansible-playbook user.yml  -e '{"username": "rr"}' 外部传参{"username": "plj"}json 方式
+[root@ansible ~]# ansible-playbook user.yml  -e @args.yaml           外部传参yaml方式
+[root@ansible ~]# cat args.yaml 
+---
+username: 
+  plj
+[root@ansible ~]#
+练习5:error的处理,对于一些创建的文件夹,创建过的报错正常,也要往下进行,因为不影响结果,所以报错不管ignore
+[root@ansible ~]# vim error.yml
+---
+- hosts: cache
+  remote_user: root
+  tasks:
+    - shell: mkdir /tmp/cache
+      ignore_errors: True
+    - name: Restart
+      service:
+        name: httpd
+        state: restarted
+[root@ansible ~]# ansible-playbook error.yml
+练习6:tag和handlers触发器指定某个执行某个任务,并启用触发器进行重启服务操作
+[root@ansible ~]# cat handlers.yml 
+- hosts: web
+  remote_user: root
+  tasks: 
+    - copy: 
+        src: httpd.conf
+        dest: /etc/httpd/conf/httpd.conf
+        owner: root
+        group: root
+        mode: 0644
+      tags: chage_conf                        执行任务标签
+      notify:                                 调用触发器
+         - reload_httpd
+    - copy: 
+        src: index.html
+        dest: /var/www/html/index.html
+        owner: apache
+        group: apache
+        mode: 0644
+      tags: chage_index
+  handlers:                                     触发器
+    - name: reload_httpd
+      service: 
+        name: httpd
+        state: restarted 
+[root@ansible ~]#
+练习7:when条件判断
+register保存上一个命令的执行结果(保存的不止有返回值,结果,基础命令,状态,输出,开始时间,结束时间一切的执行现场)
+[root@ansible ~]# cat load.yml 
+---
+- hosts: web
+  remote_user: root
+  tasks: 
+    - shell: uptime |awk '{printf("%.2f",$(NF-2))}'
+      register: result
+    - service: 
+        name: httpd
+        state: stopped
+      when: result.stdout|float > 0.7     .stdout是标准输出以转换数字跟0.7比较
+[root@ansible ~]#
+验证:写一个死循环:
+[root@web1 ~]#awk 'BEGIN{while(1){}}',慢慢的死循环
+[root@web1 ~]#fg停止死循环
+[root@web1 ~]#watch -n 1 'uptime' 每1s执行一次
+练习8:多用户创建一个组就是一个item,所有变量换成item
+[root@ansible ~]# vim users.yml
+---
+- hosts: db
+  remote_user: root
+  tasks:
+    - name: create user "{{item}}"
+      user:
+        name: "{{item.username}}"
+        group: "{{item.group}}"
+        password: "{{item.password|password_hash('sha512')}}"
+      with_items:                                  
+        -                                                        数组
+          username: nb
+          group: users
+          password: "123456"
+        - 
+          username: wk
+          group: bin
+          password: banana
+练习9:debug调试信息debug:var=result,显示result的调试信息
+[root@ansible ~]# cat load.yml 
+---
+- hosts: web
+  remote_user: root
+  tasks: 
+    - shell: uptime |awk '{printf("%.2f",$(NF-2))}'
+      register: result
+    - service: 
+        name: httpd
+        state: stopped
+      when: result.stdout|float > 0.7     .stdout是标准输出以转换数字跟0.7比较
+    - name: show debug info
+      debug: var=result
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                      day07 大型数据架构及配置技术ELK,日志分析的
+1 什么是ELK:是一套解决方案,对日志的分析解锁处理的,是日志分析平台，不是一款软件,而是一整套解决方案,是三个软件产品的首字母缩写，ELK分别代表以下
+-Elasticsearch 负责日志检索和存储 数据库
+-Logstash      负责日志的收集和分析处理
+-Kibana        负责日志的可视化
+类似于以下对应
+l nmp
+  kel  做图表
+l 产生日志,传给ELA数据库,展示给页面看到
+
+主要特点:
+-实时分析
+-分布式实时文件存储,并将每一个字段都编入索引
+-文档导向,所有的对象都是文档
+-高可用性 易扩展 支持集群 分片和复制
+-接口友好,支持JSON
+* Elasticserch相关概念
+node     装有一个ES服务器的节点
+Cluter   有多个node组成的集群
+Document 一个可被搜索的基础信息单元
+Index    拥有相似特征的文档的集合
+Type 表   一个索引中可以定义一种或多种类型
+Filed    是ES的最小单元,相当于数据的某一列
+Shards   索引的分片,每一个分片就是一个Shard
+Replicas 索引的拷贝
+DB-->Databases-->Tables-->Rows-->Columns
+关系型  数据库       表         行          列
+ES-->indices-->Types-->Documents-->Fields
+ES    索引       类型       文档          域(字段)
+ES数据库NoSQL非关系型集群安装
+* 修改配置文件/etc/hosts
+ 192.168.1.51 es1
+ 192.168.1.52 es2
+ 192.168.1.53 es3
+ 192.168.1.54 es4
+ 192.168.1.55 es5
+* 安装支持的java8.0版本
+  #yum -y install java-1.8.0-openjdk.x86_64
+* 修改yum源,安装elk
+  #yum -y install elasticsearch
+* 修改配置文件/etc/elasticsearch/elasticsearch.yml
+  #vim /etc/elasticsearch/elasticsearch.yml
+     17 cluster.name: myelk        //配置集群名字
+     23 node.name: es1        //当前主机名称
+     54 network.host: 0.0.0.0     // 0.0.0.0（监听所有地址）
+     68 discovery.zen.ping.unicast.hosts: ["es1", "es2", "es3"]     //不用全写,指定三个节点,用于主机添加,此3台任意一台OK,该主机都能添加到该集群
+* 启动服务,访问网页
+   20  systemctl restart elasticsearch.service 
+   21  systemctl enable elasticsearch.service 
+   22  ss -antup
+   23  ss -antup | grep 9200
+   24  ss -antup | grep 9300
+   http://192.168.1.51:9200/                        查看安装是否成功
+   http://192.168.1.51:9200/_cluster/health?pretty  查看集群  pretty相当于换行
+9200端口
+
+
+
+
+
+
+3个插件:
+安装插件:
+[root@es1 bin]# pwd
+/usr/share/elasticsearch/bin
+[root@es1 bin]# ./plugin install file:///usr/share/elasticsearch/bin/bigdesk-master.zip 
+[root@es1 bin]# ./plugin install file:///usr/share/elasticsearch/bin/elasticsearch-head-master.zip 
+[root@es1 bin]#  ./plugin install file:///usr/share/elasticsearch/bin/elasticsearch-kopf-master.zip 
+[root@es1 bin]#  ./plugin list                           查看安装的组件
+[root@es1 bin]#  history
+[root@es1 bin]# firefox http://192.168.1.51:9200/_plugin/head/
+
+head插件:
+http://192.168.1.51:9200/_plugin/head/
+kopf插件:是一个Ela的的管理工具,提供了对ES集群操作的API
+http://192.168.1.51:9200/_plugin/kopf/#!/cluster
+bigdesk插件:是一个集群监控工具,通过他查看es集群的各种状态
+http://192.168.1.51:9200/_plugin/bigdesk/#nodes
+API:对数据库增删改查的工具
+curl -A 修改请求的agent 源是用什么方法访问访问          curl -A "bb" http://118.144.89.240/info.php
+     -X 设置请求方法      PUT DELETE POST GET       curl -XPUT http://118.144.89.240/info.php
+     -i 显示返回头信息 查看是什么网站nginx还是apache  curl -i http://118.144.89.240/info.php
+
+_cat API查询集群状态,节点信息
+-v显示素偶有信息
+[root@es1 bin]# curl http://192.168.1.52:9200/_cat/master?help
+http://192.168.1.52:9200/_cat/master?v  
+
+-help显示帮助信息
+[root@es1 bin]# curl http://192.168.1.52:9200/_cat/master?help
+http://192.168.1.52:9200/_cat/master?help
+
+命令行创建索引也就是库:tedu是名字,创建索引分片5,1个副本,就是复制原始数据1份
+curl -XPUT http://192.168.1.53:9200/tedu/ -d '{
+ "setting":{
+    "index":{
+         "number_of_shards":5,
+         "number_of_replicas":1
+   }
+  }
+}'
+添加一份数据都是用命令行库名表名:
+curl -XPUT http://192.168.1.55:9200/tedu/teacher/1 -d '{
+"姓名":"牛奔",
+"爱好":"大翠翠",
+"年龄":"26"
+}'
+修改数据POST  http://192.168.1.51:9200/_plugin/head/ 上查看数据浏览
+curl -XPOST http://192.168.1.55:9200/tedu/teacher/4/_update -d '{
+  "doc":{
+    "年龄":"18"
+  }
+}'
+查询和删除一条数据和删除一个库数据
+curl -XGET http://192.168.1.55:9200/tedu/teacher/3
+curl -XDELETE http://192.168.1.55:9200/tedu/teacher/3
+curl -XDELETE http://192.168.1.55:9200/tedu/
+
+导入数据:
+[root@es1 ~]# gzip -d accounts.json.gz 
+[root@es1 ~]# gzip -d logs.jsonl.gz 
+[root@es1 ~]# gzip -d shakespeare.json.gz 
+[root@es1 ~]# ls
+accounts.json  logs.jsonl  shakespeare.json
+[root@es1 ~]# curl -XPOST http://192.168.1.51:9200/_bulk --data-binary @shakespeare.json  导入数据
+[root@es1 ~]#  curl -XPOST http://192.168.1.51:9200/aa/bb/_bulk --data-binary @accounts.json 
+[root@es1 ~]#  curl -XPOST http://192.168.1.51:9200/_bulk --data-binary @logs.jsonl 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                     day08 大型数据架构及配置技术ELK的第二大组件Kibana组件
+1 kibana组件安装
+[root@kibana ~]# yum -y install kibana
+[root@kibana ~]# vim /opt/kibana/config/kibana.yml 
+                    2 server.port: 5601        //若把端口改为80，可以成功启动kibana，但ss时没有端口，没有监听80端口，服务里面写死了，不能用80端口，只能是5601这个端口
+                    5 server.host: "0.0.0.0"        //服务器监听地址
+                    15 elasticsearch.url: http://192.168.1.51:9200    //声明地址，从哪里查，集群里面随便选一个
+                    23 kibana.index: ".kibana"    //kibana自己创建的索引
+                    26 kibana.defaultAppId: "discover"    //打开kibana页面时，默认打开的页面discover
+                    53 elasticsearch.pingTimeout: 1500    //ping检测超时时间
+                    57 elasticsearch.requestTimeout: 30000    //请求超时
+                    64 elasticsearch.startupTimeout: 5000    //启动超时   
+[root@kibana ~]# systemctl enable kibana.service 
+[root@kibana ~]# systemctl start kibana.service 
+                      访问验证:http://192.168.1.56:5601
+
+1 logstash组件安装(配置文件参考官方手册)
+[root@logstash ~]# vim /etc/hosts
+192.168.1.51 es1
+192.168.1.52 es2
+192.168.1.53 es3
+192.168.1.54 es4
+192.168.1.55 es5
+192.168.1.56 kibana
+192.168.1.57 logstash
+[root@logstash ~]#  yum -y install java-1.8.0-openjdk
+[root@logstash ~]# yum -y install logstash
+[root@logstash ~]# touch /etc/logstash/logstash.conf
+[root@logstash ~]#  /opt/logstash/bin/logstash  --version
+logstash 2.3.4
+[root@logstash ~]# /opt/logstash/bin/logstash-plugin  list   //查看插件
+...
+logstash-input-stdin    //标准输入插件
+logstash-output-stdout    //标准输出插件
+...
+[root@logstash ~]# vim /etc/logstash/logstash.conf
+input{
+    stdin{
+   }
+}
+filter{
+}
+output{
+    stdout{
+   }
+}
+[root@logstash ~]# /opt/logstash/bin/logstash -f /etc/logstash/logstash.conf  //启动并测试
+Settings: Default pipeline workers: 2
+Pipeline main started
+aa        //logstash 配置从标准输入读取输入源,然后从标准输出输出到屏幕
+2018-09-15T06:19:28.724Z logstash aa
+
+金步国
+Input file模块:(取log)
+查找那个模块以下路径:
+https://github.com/logstash-plugins/--->Documentation(central location)--->Input plugins--->file
+[root@logstash ~]# vim /etc/logstash/logstash.conf
+input{
+  stdin{
+    codec => json
+  }
+  file{
+    start_position => "beginning"                             配置第一次读取文件从什么地方开始
+    sincedb_path => "/var/lib/logstash/sincedb-access"        记录读取文件的位置
+    path => ["/tmp/a.log","/var/tmp/b.log"]                   读取的log位置
+    type => 'testlog'                                         记录的log类型
+  }
+}
+
+filter{
+}
+
+output{
+  stdout{
+    codec => rubydebug
+  }
+}
+filter grok模块:(正则处理log)
+/opt/logstash/vendor/bundle/jruby/1.9/gems/logstash-patterns-core-2.0.5/patterns/grok-patterns
+filter{
+  grok {
+    match => { "message" => "%{COMBINEDAPACHELOG}" }
+  }
+}
+output ES模块:
+
+* filebeat监控所有web主机的log
+1 web主机安装filebeat
+[root@an_web1 ~]#  vim/etc/filebeat/filebeat.yml  
+paths:
+    - /var/log/httpd/access_log   //日志的路径，短横线加空格代表yml格式
+document_type: apachelog    //文档类型
+elasticsearch:        //加上注释
+hosts: ["localhost:9200"]                //加上注释
+logstash:                    //去掉注释
+hosts: ["192.168.1.57:5044"]     //去掉注释,logstash那台主机的ip
+[root@se5 ~]# systemctl start filebeat
+2  logstash服务器配置文件更新
+input{
+  stdin{
+    codec => json
+  }
+  beats{
+    port => 5044
+  }
+  file{
+    start_position => "beginning"
+    sincedb_path => "/var/lib/logstash/sincedb-access"
+    #sincedb_path => "/dev/null"
+    path => ["/tmp/a.log","/var/tmp/b.log"]
+    type => 'testlog'
+  }
+}
+
+filter{
+  if [type] == "apache_log"{
+  grok {
+    match => { "message" => "%{COMBINEDAPACHELOG}" }
+  }}
+}
+
+output{
+  stdout{
+    codec => rubydebug
+  }
+  if [type] == "apache_log"{
+  elasticsearch{
+    hosts => ["es1:9200","es2:9200","es3:9200"]
+    index => "weblog"
+    flush_size => 2000
+    idle_flush_time => 10
+  }}
+}
 
 
 
