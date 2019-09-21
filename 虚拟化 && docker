@@ -1,4 +1,9 @@
 云平台部署与管理、大型架构 外网:git clone git://43.254.90.134/nsd1905.git   达内网:git clone git://172.40.53.65/nsd1905.git
+存储类型:
+DAS(直连存储)ide线,sata线 sas线,硬盘和电脑连接的线
+NAS(网络附加存储)Samba nfs ftp 文件系统如xfs ext4
+SAN(存储区域网络) ISCSI 块存储
+SDS(软件定义存储)分布式存储 ceph glusterfs...
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ##################################################################################################################################################3
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -8,7 +13,7 @@ mount 只能挂载块设备
 losetup 做块设备
 yum 自己创找的yum源.pgp=0.第三方yum源需要gpg检测报的安全
 baseurl=repoadta路径.
-真机#git clone git://172.40.53.65/nsd1905.git
+真机lh/1905 #git clone git://172.40.53.65/nsd1905.git
 真机#git pull       更新git
 #base-vm db1       创建虚拟机
 #irsh list --all   显示所有
@@ -327,7 +332,7 @@ gpgcheck=0
 
         [root@docker2 ~]# docker load -i busybox.tar  导入镜像
         [root@docker2 ~]# docker images    查看镜像
-启动镜像生成容器:[root@docker1 ~]# docker run -it docker.io/cento   s:latest  /bin/bash    相当于创建一个前端盘并进入
+启动镜像生成容器:[root@docker1 ~]# docker run -it docker.io/centos:latest  /bin/bash    相当于创建一个前端盘并进入
 [root@docker1 ~]# docker run -it docker.io/ :latest 非交互        进程起来了,只需web访问即可
 
 6大命名空间:
@@ -410,8 +415,8 @@ CMD ["/usr/sbin/httpd","-DFOREGROUND"]          开机自启
        [root@client ~]# yum -y install docker-distribution.x86_64                           安装私有仓库
        [root@client ~]# systemctl start docker-distribution.service 
        [root@client ~]# systemctl enable docker-distribution.service 
-       [root@client ~]# http://192.168.1.30:5000/v2/_catalog
-       [root@client ~]# cat /etc/docker-distribution/registry/config.yml  仓库配置文件 
+       [root@client ~]# curl http://192.168.1.30:5000/v2/_catalog
+       [root@client ~]# cat /etc/docker-distribution/registry/config.yml  仓库配置文件不用改 
        [root@client ~]# ls /var/lib/registry/                             仓库存储路径
 
 2 给镜像仓库上传镜像192.168.1.31上配置
@@ -511,13 +516,20 @@ ansible的加载顺序:
 最后检查/etc/ansible/ansible.cfg文件
 
 环境准备:
+[root@ansible ansible]# cat /etc/hosts
+192.168.1.40 ansible
+192.168.1.41 web1
+192.168.1.42 web2
+192.168.1.43 db1
+192.168.1.44 db2
+192.168.1.45 cache
 自定义yum
 [student@room9pc01 ~]$ cd /linux-soft/04/ansible/
 [student@room9pc01 ansible]$ cp * /var/ftp/ansible
 [student@room9pc01 ansible]$ cd /var/ftp/ansible
 [student@room9pc01 ansible]$ createrepo --update .    更新索引文件
 配置yum客户端安装ansible
-
+yum -y install ansible
 
 修改配置文件/etc/ansible/ansible.cfg
 [root@ansible ~]# vim /etc/ansible/ansible.cfg
@@ -561,7 +573,8 @@ ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件
 2 command模块远程执行命令 uptime 系统负载不能启用bash进程 <>|&不能执行所以用shell模块
    [root@ansible ~]# ansible web -m command -a 'uptime' 远程查看web的系统负载 -a是command的参数   
 3 shell模块    ansible 执行命令是二次解析，第一次在本机解析, 第二次在执行机器解析，需要第二次解析的变量要转移（\）
-   [root@ansible ~]# ansible db -m shell -a 'ps -ef | grep ssh'   
+   [root@ansible ~]# ansible db -m shell -a 'ps -ef | grep ssh'  
+   [root@ansible ~]# ansible web -m shell -a "sed -i 's,#pid        logs/nginx.pid;,pid        /var/run/nginx.pid;,' /usr/local/nginx/conf/nginx.conf" 
 4 script模块在本地写脚本,然后使用script模块批量执行
    [root@ansible ~]# ansible web -m script -a './test.sh'
 5 copy模块
@@ -1074,8 +1087,663 @@ output{
     idle_flush_time => 10
   }}
 }
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  基础平台结果                                                   day09 大数据运维60(nn01) 61 62 63(node1-3)
+1 什么是大数据:对信息处理
+  * 大数据5大特性:
+     大体量   
+     多样性
+     时效性  
+     准确性  
+     大价值
+大数据与Hadoop
+   Hadoop是什么:平台
+      是一种分析和处理海量数据的软件平台
+      是一款开源软件,使用JAVA开发
+      可以提供一个分布式基础架构
+   Hadoop特点:
+      高可靠性 高扩展性 高效性 高容错性 低成本
+Hadoop体系架构组件(有很多前三个最重要):
+ HDFS   Hadoop分布式文件系统
+ MapReduce分布式计算框架
+ Yarn 集群资源管理系统
+ Zookeeper 分布式协作服务
+ Hbase 分布式列存数据库
+ Hive  基于Hadoop的数据仓库
+ Sqoop 数据同步工具
+ Pig 基于Hadoop的数据流系统
+ Mahout 数据挖掘算法库
+ Flume 日志收集工具
+
+HDFS存数据
+Mapreduce处理数据:
+stome输出结果
+
+HDFS结构(4大角色):(一份数据存储多分)
+   Client
+   NameNode
+   Secondarynode
+   Datanode
+4大角色作用:
+ * Client
+  -切分文件    切成块,每块128M大小
+  -访问HDFS
+  -与NameNode交互,获取文件位置信息  存哪,就是存哪的记录fsimage
+  -与DAtaNode交互,读取和写入数据    
+ * NameNode  
+  -Master,管理HDFS的名称空间和数据块映射信息,配置副本策略,处理所有客户端请求   就是client过来块信息告诉你存哪在哪,存哪的这些信息用fsimage记录,并能存储多分块数据
+ * Secondary NameNode
+   -定期合并fsimage和fsedits文件变更补丁推送给NameNode
+   -紧急情况下,可辅助恢复NameNode
+ * DataNode
+   -数据存储节点,存储实际的数据
+   -汇报存储信息给NameNode
+       Block:
+             每块128M
+             每块有多个副本
+MapReduce结构:
+Yarn结构:  Resourcemanager Nodemanager
+
+Hadoop部署方式三种:
+ 单机
+ 伪分布式    把所有角色安装到同一台机器
+ 完全分布式  把所有角色安装到不同的机器
+单机模式配置:
+[root@nn01 ~]# yum -y install java-1.8.0-openjdk-devel
+[root@nn01 ~]# java -version
+openjdk version "1.8.0_131"
+OpenJDK Runtime Environment (build 1.8.0_131-b12)
+OpenJDK 64-Bit Server VM (build 25.131-b12, mixed mode)
+[root@nn01 ~]# jps
+[root@nn01 ~]# cd hadoop/
+[root@nn01 hadoop]# ls
+hadoop-2.7.7.tar.gz  kafka_2.12-2.1.0.tgz  zookeeper-3.4.13.tar.gz
+[root@nn01 hadoop]# tar -xf hadoop-2.7.7.tar.gz 
+[root@nn01 hadoop]# mv hadoop-2.7.7 /usr/local/hadoop
+[root@nn01 hadoop]# cd /usr/local/hadoop
+[root@nn01 hadoop]# ls
+bin  include  libexec      NOTICE.txt  sbin
+etc  lib      LICENSE.txt  README.txt  share
+[root@nn01 hadoop]# ./bin/hadoop   //报错，JAVA_HOME没有找到
+Error: JAVA_HOME is not set and could not be found.
+[root@nn01 hadoop]#
+报错解决开始执行:
+[root@nn01 hadoop]# rpm -ql java-1.8.0-openjdk
+[root@nn01 hadoop]# cd ./etc/hadoop/
+[root@nn01 hadoop]# vim hadoop-env.sh
+25 export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.161-2.b14.el7.x86_64    /jre"
+33 export HADOOP_CONF_DIR="/usr/local/hadoop/etc/hadoop"
+[root@nn01 ~]# cd /usr/local/hadoop/
+[root@nn01 hadoop]# ./bin/hadoop
+[root@nn01 hadoop]# mkdir ll
+[root@nn01 hadoop]# cp *.txt ll/
+[root@nn01 hadoop]# ./bin/hadoop jar share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar wordcount ll xx       //wordcount为参数 统计input这个文件夹，存到output这个文件里面（这个文件不能存在，要是存在会报错，是为了防止数据覆盖）
+[root@nn01 hadoop]#  cat xx/part-r-00000    //查看
+伪分布式模式配置:
+
+xml的配置文件格式
+<property>
+  <name>关键字</name>
+  <value>变量</value>
+  <description>描述</description>
+</property>
 
 
+完全分布式:
+HDFS配置:
+* 环境准备
+[root@nn01 ~]# vim /etc/hosts
+192.168.1.60  nn01
+192.168.1.61  node1
+192.168.1.62  node2
+192.168.1.63  node3
+[root@node1 ~]# yum -y install java-1.8.0-openjdk-devel
+[root@node2 ~]# yum -y install java-1.8.0-openjdk-devel
+[root@node3 ~]# yum -y install java-1.8.0-openjdk-devel
+[root@nn01 ~]# vim /etc/ssh/ssh_config    //第一次登陆不需要输入yes
+Host *
+        GSSAPIAuthentication yes
+        StrictHostKeyChecking no
+[root@nn01 .ssh]# ssh-keygen
+[root@nn01 .ssh]# for i in 60 61 62 63; do  ssh-copy-id  192.168.1.$i; done   
+//部署公钥给nn01，node1，node2，node3
+[root@nn01 .ssh]# ssh node1 到node3
+* 修改环境配置文件hadoop-env.sh  这个同上
+* 修改slaves文件
+[root@nn01 ~]# vim /usr/local/hadoop/etc/hadoop/slaves                   存放Datanode节点
+node1
+node2
+node3
 
+* 修改hadoop的核心配置文件core-site
+[root@nn01 ~]# vim /usr/local/hadoop/etc/hadoop/core-site.xml
+<configuration>
+<property>
+  <name>fs.defaultFS</name>                         
+  <value>hdfs://nn01:9000</value>                       NameNode的主机使用什么样的文件系统
+</property>
+<property>
+  <name>hadoop.tmp.dir</name>                  非常重要的数据存放的位置
+  <value>/var/hadoop</value>
+</property>
+</configuration>
+
+* 修改hdfs-site文件
+[root@nn01 ~]# vim /usr/local/hadoop/etc/hadoop/hdfs-site.xml
+<configuration>
+<property>
+  <name>dfs.namenode.http-address</name>                    在哪装NameNode端口号多少             
+  <value>nn01:50070</value>
+</property>
+<property>
+  <name>dfs.namenode.secondary.http-address</name>           小秘书的位置
+  <value>nn01:50090</value>
+</property>
+<property>
+  <name>dfs.replication</name>
+  <value>2</value>
+</property>
+</configuration>
+* 全部copy一份:[root@nn01 ~]# for i in 61 62 63; do scp -r /usr/local/hadoop/ root@192.168.1.$i:/usr/local/; done
+[root@nn01 ~]# mkdir /var/hadoop
+格式化:[root@nn01 hadoop]#  ./bin/hdfs namenode -format
+启动:[root@nn01 hadoop]# ./sbin/start-dfs.sh
+查看验证nn01:
+[root@nn01 hadoop]# jps
+24136 NameNode
+24460 Jps
+24319 SecondaryNameNode
+[root@nn01 hadoop]#
+数据节点查61-63看查看验证2:
+[root@node1 ~]# jps
+23127 Jps
+23054 DataNode
+[root@node1 ~]#
+查看集群是否成功:
+[root@nn01 hadoop]# bin/hdfs dfsadmin -report
+主:如果没起来可以把/var/Hadoop/清空,然后把/usr/local/hadoop/log清空,再格式化,重启下即可,还可用修复脚本恢复
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ http://hadoop.apache.org/docs/                       day10 大数据运维(完全分布式)60(nn01) 61 62 63(node1-3)
+
+mapred部署:
+[root@nn01 hadoop]# cd /usr/local/hadoop/etc/hadoop/
+[root@nn01 hadoop]# mv mapred-site.xml.template mapred-site.xml
+[root@nn01 hadoop]# vim mapred-site.xml
+<configuration>
+<property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+    </property>
+</configuration>
+
+yarn部署:
+[root@nn01 hadoop]# vim yarn-site.xml
+<property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>nn01</value>
+    </property>
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+    </property>
+同步datanode节点:
+[root@nn01 hadoop]# for i in {62..64}; do rsync -aSH --delete /usr/local/hadoop/ 192.168.1.$i:/usr/local/hadoop/  -e 'ssh' & done
+开启验证:
+[root@nn01 hadoop]#./sbin/start-all.sh 
+[root@nn01 hadoop]#./sbin/start-yarn.sh 
+[root@nn01 hadoop]# jps
+1554 Jps
+741 ResourceManager
+1321 SecondaryNameNode
+1131 NameNode
+[root@nn01 hadoop]# ./bin/yarn node -list
+19/09/17 09:41:44 INFO client.RMProxy: Connecting to ResourceManager at nn01/192.168.1.60:8032
+Total Nodes:3
+         Node-Id	     Node-State	Node-Http-Address	Number-of-Running-Containers
+     node3:35106	        RUNNING	       node3:8042	                           0
+     node2:38704	        RUNNING	       node2:8042	                           0
+     node1:39310	        RUNNING	       node1:8042	                           0
+网页验证:
+http://192.168.1.60:50070/            //--namenode web页面（nn01）
+http://192.168.1.60:50090/        //--secondory namenode web页面（nn01）
+http://192.168.1.61:50075/        //--datanode web页面（node1,node2,node3）
+http://192.168.1.60:8088/        //--resourcemanager web页面（nn01）
+http://192.168.1.61:8042/        //--nodemanager web页面（node1,node2,node3）
+
+* HDFS命令使用
+[root@nn01 hadoop]# ./bin/hadoop fs -mkdir /aa
+[root@nn01 hadoop]# ./bin/hadoop fs -ls /        //查看集群文件系统的根，没有内容
+[root@nn01 hadoop]# ./bin/hadoop fs -mkdir  /aaa        
+//在集群文件系统下创建aaa目录
+[root@nn01 hadoop]# ./bin/hadoop fs -ls /        //再次查看，有刚创建的aaa目录
+Found 1 items
+drwxr-xr-x   - root supergroup          0 2018-09-10 09:56 /aaa
+[root@nn01 hadoop]#  ./bin/hadoop fs -touchz  /fa    //在集群文件系统下创建fa文件
+[root@nn01 hadoop]# ./bin/hadoop fs -put *.txt /aaa     
+//上传*.txt到集群文件系统下的aaa目录
+[root@nn01 hadoop]#  ./bin/hadoop fs -ls /aaa    //查看
+Found 3 items
+-rw-r--r--   2 root supergroup      86424 2018-09-10 09:58 /aaa/LICENSE.txt
+-rw-r--r--   2 root supergroup      14978 2018-09-10 09:58 /aaa/NOTICE.txt
+-rw-r--r--   2 root supergroup       1366 2018-09-10 09:58 /aaa/README.txt
+[root@nn01 hadoop]# ./bin/hadoop fs -get  /aaa  //下载集群文件系统的aaa目录
+[root@nn01 hadoop]# ./bin/hadoop jar  \
+ share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar  wordcount /aaa /bbb    //hadoop集群分析大数据，hadoop集群/aaa里的数据存到hadoop集群/bbb下
+[root@nn01 hadoop]# ./bin/hadoop fs -cat /bbb/*        //查看集群里的数据
+
+增加一个新的节点node4
+[root@hadoop5 ~]# echo node4 > /etc/hostname     //更改主机名为node4
+[root@hadoop5 ~]# hostname node4
+[root@node4 ~]# yum -y install java-1.8.0-openjdk-devel
+[root@node4 ~]# mkdir /var/hadoop
+[root@nn01 .ssh]# ssh-copy-id 192.168.1.64
+[root@nn01 .ssh]# vim /etc/hosts
+192.168.1.60  nn01
+192.168.1.61  node1
+192.168.1.62  node2
+192.168.1.63  node3
+192.168.1.64  node4
+[root@nn01 .ssh]# scp /etc/hosts 192.168.1.64:/etc/
+[root@nn01 ~]# cd /usr/local/hadoop/
+[root@nn01 hadoop]# vim ./etc/hadoop/slaves
+node1
+node2
+node3
+node4
+[root@nn01 hadoop]# for i in {61..64}; do rsync -aSH --delete /usr/local/hadoop/
+\ 192.168.1.$i:/usr/local/hadoop/  -e 'ssh' & done        //同步配置
+[1] 1841
+[2] 1842
+[3] 1843
+[4] 1844
+[root@node4 ~]# cd /usr/local/hadoop/
+[root@node4 hadoop]# ./sbin/hadoop-daemon.sh start datanode  //启动
+查看状态
+[root@node4 hadoop]# jps
+24439 Jps
+24351 DataNode
+设置同步带宽:
+[root@node4 hadoop]# ./bin/hdfs dfsadmin -setBalancerBandwidth 60000000
+Balancer bandwidth is set to 60000000
+[root@node4 hadoop]# ./sbin/start-balancer.sh
+导出数据关闭节点:
+[root@nn01 hadoop]# vim /usr/local/hadoop/etc/hadoop/slaves        
+//去掉之前添加的node4
+node1
+node2
+node3
+[root@nn01 hadoop]# vim /usr/local/hadoop/etc/hadoop/hdfs-site.xml        
+//在此配置文件里面加入下面四行
+<property>                                      
+    <name>dfs.hosts.exclude</name>
+    <value>/usr/local/hadoop/etc/hadoop/exclude</value>
+</property>
+[root@nn01 hadoop]# vim /usr/local/hadoop/etc/hadoop/exclude
+node4
+[root@nn01 hadoop]# ./bin/hdfs dfsadmin -refreshNodes                导出数据
+Refresh nodes successful
+[root@nn01 hadoop]# ./bin/hdfs dfsadmin -report  //查看node4显示Decommissioned
+Name: 192.168.1.64:50010 (node4)
+Hostname: node4
+Decommission Status : Decommissioned
+Configured Capacity: 2135949312 (1.99 GB)
+DFS Used: 4096 (4 KB)
+[root@node4 hadoop]# ./sbin/hadoop-daemon.sh stop datanode    //停止datanode
+stopping datanode
+[root@node4 hadoop]# ./sbin/yarn-daemon.sh start nodemanager             
+//yarn 增加 nodemanager
+[root@node4 hadoop]# ./sbin/yarn-daemon.sh stop  nodemanager  //停止nodemanager
+stopping nodemanager
+[root@node4 hadoop]# ./bin/yarn node -list        
+//yarn 查看节点状态，还是有node4节点，要过一段时间才会消失
+Total Nodes:4
+         Node-Id         Node-State    Node-Http-Address    Number-of-Running-Containers
+     node3:34628            RUNNING           node3:8042                               0
+     node2:36300            RUNNING           node2:8042                               0
+
+NFS网关配置:
+步骤一:
+1) 基础准备HDFS
+[root@localhost ~]# echo nfsgw > /etc/hostname 
+[root@localhost ~]# hostname nfsgw
+[root@nn01 hadoop]# vim /etc/hosts
+192.168.1.60  nn01
+192.168.1.61  node1
+192.168.1.62  node2
+192.168.1.63  node3
+192.168.1.64  node4
+192.168.1.65  nfsgw
+2）创建代理用户（nn01和nfsgw上面操作），以nn01为例子
+[root@nn01 hadoop]# groupadd -g 800 nfsuser
+[root@nn01 hadoop]# useradd -u 800 -g 800 -r -d /var/hadoop nfsuser
+3）配置core-site.xml
+[root@nn01 hadoop]# ./sbin/stop-all.sh   //停止所有服务
+[root@nn01 hadoop]# cd etc/hadoop
+[root@nn01 hadoop]# >exclude
+[root@nn01 hadoop]# vim core-site.xml
+    <property>
+        <name>hadoop.proxyuser.nfsuser.groups</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.nfsuser.hosts</name>
+        <value>*</value>
+    </property>
+4)同步配置到node1，node2，node3
+[root@nn01 hadoop]#rsync -aXSH --delete /usr/local/hadoop/etc node1:/usr/local/hadoop/etc
+[root@nn01 hadoop]#rsync -aXSH --delete /usr/local/hadoop/etc node2:/usr/local/hadoop/etc
+[root@nn01 hadoop]#rsync -aXSH --delete /usr/local/hadoop/etc node3:/usr/local/hadoop/etc
+5）启动集群
+[root@nn01 hadoop]# /usr/local/hadoop/sbin/start-dfs.sh
+6）查看状态
+[root@nn01 hadoop]# /usr/local/hadoop/bin/hdfs  dfsadmin -repor
+
+步骤二:NFSGW配置
+1）安装java-1.8.0-openjdk-devel和rsync
+[root@nfsgw ~]# yum -y install java-1.8.0-openjdk-devel
+[root@nfsgw ~]# rsync -aXSH nn01:/usr/local/hadoop /usr/local
+2)修改配置文件
+[root@nfsgw ~]# vim /usr/local/hadoop/etc/hadoop/hdfs-site.xml
+    <property>
+        <name>nfs.exports.allowed.hosts</name>
+        <value>* rw</value>
+    </property>
+    <property>
+        <name>nfs.dump.dir</name>
+        <value>/var/nfstmp</value>
+    </property>
+3)配置完属性后创建/var/nfstmp文件夹,并赋予权限
+[root@nfsgw hadoop]#mkdir /var/nfstmp
+[root@nfsgw hadoop]#chown nfsuser.nfsuser /var/nfstmp/
+4)设置/usr/local/hadoop/logs权限,为代理用户赋予读写执行权限,用于写入logs内容
+[root@nfsgw hadoop]#setfacl -m nfsuser:rwx /usr/local/hadoop/logs
+[root@nfsgw hadoop]#rm -rf /usr/local/hadoop/logs/*
+5)使用root用户启动portmap服务
+./sbin/hadoop-daemon.sh --script ./bin/hdfs start portmap
+6)使用代理用户启动nfs3
+[root@nfsgw hadoop]# sudo -u nfsuser ./sbin/hadoop-daemon.sh --script ./bin/hdfs start nfs3
+[root@nfsgw hadoop]# jps
+23184 Portmap
+23380 Jps
+23261 Nfs3
+[root@nfsgw hadoop]# 
+7)客户端挂载
+[root@localhost ~]# yum -y install nfs-utils
+[root@localhost ~]# mount -t nfs -o vers=3,proto=tcp,noatime,nolock,sync,noacl 192.168.1.65:/ /mnt/
+8) 永久挂载
+[root@localhost ~]# vim /etc/fstab
+192.168.1.64:/  /mnt/ nfs  vers=3,proto=tcp,nolock,noatime,sync,noacl,_netdev 0 0 
+[root@localhost ~]# mount -a
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ http://hadoop.apache.org/docs/                       day10 大数据运维(完全分布式)常用组件、Kafka集群、Hadoop高可用 60 66 61 62 63 
+一、常用组件
+Zookeeper是什么:是一个开源的分布式应用程序协调服务
+Zookeeper能做什么:是用来保证数据在集群间的事务一致性                  事务: 一系列事情的总合
+角色与特性:
+角色与选举
+Zookeeper集群安装:
+1)都能ping通
+[root@nn01 hadoop]# vim /etc/hosts
+192.168.1.60  nn01
+192.168.1.61  node1
+192.168.1.62  node2
+192.168.1.63  node3
+192.168.1.66  node4
+[root@nn01 hadoop]# for i in {62..64}  \
+do    \
+scp /etc/hosts 192.168.1.$i:/etc/    \
+done        //同步配置
+2)修改配置文件
+[root@nn01 ~]# tar -xf zookeeper-3.4.13.tar.gz 
+[root@nn01 ~]# mv zookeeper-3.4.13 /usr/local/zookeeper
+[root@nn01 ~]# cd /usr/local/zookeeper/conf/
+[root@nn01 conf]# ls
+configuration.xsl  log4j.properties  zoo_sample.cfg
+[root@nn01 conf]# mv zoo_sample.cfg  zoo.cfg
+[root@nn01 conf]# chown root.root zoo.cfg
+[root@nn01 conf]# vim zoo.cfg
+server.1=node1:2888:3888
+server.2=node2:2888:3888
+server.3=node3:2888:3888
+server.4=nn01:2888:3888:observer
+3)拷贝 /usr/local/zookeeper 到其他集群主机
+[root@nn01 conf]# for i in 61 62 63; do rsync -aSH --delete /usr/local/zookeeper/ 192.168.1.$i:/usr/local/zookeeper; done
+4）创建 mkdir /tmp/zookeeper，每一台都要
+[root@nn01 conf]# mkdir /tmp/zookeeper
+[root@nn01 conf]# ssh node1 mkdir /tmp/zookeeper
+[root@nn01 conf]# ssh node2 mkdir /tmp/zookeeper
+[root@nn01 conf]# ssh node3 mkdir /tmp/zookeeper
+5）创建 myid 文件，id 必须与配置文件里主机名对应的 server.(id) 一致
+[root@nn01 conf]# echo 4 >/tmp/zookeeper/myid
+[root@nn01 conf]# ssh node1 'echo 1 >/tmp/zookeeper/myid'
+[root@nn01 conf]# ssh node2 'echo 2 >/tmp/zookeeper/myid'
+[root@nn01 conf]# ssh node3 'echo 3 >/tmp/zookeeper/myid'
+6)启动服务，单启动一台无法查看状态，需要启动全部集群以后才能查看状态，每一台上面都要手工启动（以nn01为例子
+[root@nn01 conf]# /usr/local/zookeeper/bin/zkServer.sh start
+[root@nn01 conf]# ssh node1 /usr/local/zookeeper/bin/zkServer.sh start
+[root@nn01 conf]# ssh node2 /usr/local/zookeeper/bin/zkServer.sh start
+[root@nn01 conf]# ssh node3 /usr/local/zookeeper/bin/zkServer.sh start
+7)查看状态
+[root@nn01 conf]# /usr/local/zookeeper/bin/zkServer.sh status
+ZooKeeper JMX enabled by default
+Using config: /usr/local/zookeeper/bin/../conf/zoo.cfg
+Mode: observe
+[root@nn01 conf]# ssh node2 /usr/local/zookeeper/bin/zkServer.sh status
+[root@nn01 conf]# /root/zkstats node{1..3} nn01   {扩展知识,通过脚本检查每个节点状态及角色}
+node1	Mode: follower
+node2	Mode: follower
+node3	Mode: leader
+nn01	Mode: observer
+[root@nn01 conf]# 
+
+
+Kafka集群:
+读缓存
+[root@node1 hadoop]# tar -xf kafka_2.12-2.1.0.tgz
+[root@node1 ~]# mv kafka_2.12-2.1.0 /usr/local/kafka
+[root@node1 ~]# cd /usr/local/kafka/config
+[root@node1 config]# vim server.properties
+broker.id=22
+zookeeper.connect=node1:2181,node2:2181,node3:2181
+拷贝 kafka 到其他主机，并修改 broker.id ,不能重复
+[root@node1 config]# for i in 63 64; do rsync -aSH --delete /usr/local/kafka 192.168.1.$i:/usr/local/; done
+[1] 27072
+[2] 27073
+[root@node2 ~]# vim /usr/local/kafka/config/server.properties        
+//node2主机修改
+broker.id=23
+[root@node3 ~]# vim /usr/local/kafka/config/server.properties        
+//node3主机修改
+broker.id=24
+[root@node1 local]# /usr/local/kafka/bin/kafka-server-start.sh -daemon /usr/local/kafka/config/server.properties 
+[root@node1 local]# jps        //出现kafka
+26483 DataNode
+27859 Jps
+27833 Kafka
+26895 QuorumPeerMain
+[root@node1 local]# /usr/local/kafka/bin/kafka-topics.sh --create --partitions 1 --replication-factor 1 --zookeeper node3:2181 --topic aa    
+Created topic "aa".
+[root@node2 ~]# /usr/local/kafka/bin/kafka-console-producer.sh \
+--broker-list node2:9092 --topic aa        //写一个数据
+ccc
+ddd
+[root@node3 ~]# /usr/local/kafka/bin/kafka-console-consumer.sh \ 
+--bootstrap-server node1:9092 --topic aa        //这边会直接同步
+ccc
+ddd
+
+高可用:
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ http://hadoop.apache.org/docs/                       day10 kubernetes集群简称k8s 30-自定义仓库   10(master) 11 12 13
+1、自定义docker仓库,参考上: 
+2、1个master和安装3个node(1-3)的docker
+node(1-3)安装docker,能用到自定义库即可.
+3、有8个rpm包做成yum源
+[root@master ~]# vim /etc/yum.repos.d/local.repo
+[local_repo]
+name=CentOS-$releasever - Base
+baseurl="ftp://192.168.1.254/centos-1804"
+enabled=1
+gpgcheck=1
+[extras]
+name=extras
+baseurl="ftp://192.168.1.254/extras"
+enabled=1
+gpgcheck=0
+[kub]
+name=kub
+baseurl="ftp://192.168.1.254/kub"
+enabled=1
+gpgcheck=0
+[root@master ~]# for i in 11 12 13 ; do scp /etc/yum.repos.d/local.repo root@192.168.1.$i:/etc/yum.repos.d/; done
+4 安装3个包
+[root@master ~]# yum -y install etcd kubernetes-master kubernetes-client
+5 配置
+ /etc/etcd/etcd.conf
+        6: ETCD_LISTEN_CLIENT_URLS="http://192.168.1.100:2379"
+     /etc/kubernetes/config
+       22: KUBE_MASTER="--master=http://192.168.1.100:8080"
+     /etc/kubernetes/apiserver
+        8: KUBE_API_ADDRESS="--insecure-bind-address=0.0.0.0"
+       17: KUBE_ETCD_SERVERS="--etcd-servers=http://192.168.1.100:2379"
+       23: 删除 ServiceAccount 参数
+     /etc/kubernetes/controller-manager
+     /etc/kubernetes/scheduler
+6 起4个服务和开机自启
+[root@master ~]# systemctl start kube-apiserver
+[root@master ~]# systemctl start kube-controller-manager
+[root@master ~]# systemctl start kube-scheduler
+[root@master ~]# systemctl start etcd
+7 配置node(1-3)
+ [root@node1 ~]#yum -y install kubernetes-node
+ [root@node1 ~]# vim /etc/kubernetes/config
+       22: KUBE_MASTER="--master=http://192.168.1.10:8080"
+ [root@node1 ~]# vim /etc/kubernetes/kubelet
+        5: KUBELET_ADDRESS="--address=0.0.0.0"
+       11: KUBELET_HOSTNAME="--hostname-override=本机名称"
+       14: 添加 --kubeconfig=/etc/kubernetes/kubelet.kubeconfig 
+                --pod-infra-container-image=pod-infrastructure:latest
+ [root@node1 ~]#vim /etc/kubernetes/kubelet.kubeconfig
+apiVersion: v1
+kind: Config
+clusters:
+  - cluster:
+      server: http://192.168.1.100:8080                ###Master的IP，即自身IP
+    name: local
+contexts:
+  - context:
+      cluster: local
+    name: local
+current-context: local
+[root@node1 ~]# systemctl start kubelet
+[root@node1 ~]# systemctl start kube-proxy
+
+打通网络:
+4台都安装软件包:
+[root@master ~]# yum -y install flannel
+[root@master ~]# ssh node1 yum -y install flannel
+[root@master ~]# ssh node2 yum -y install flannel
+[root@master ~]# ssh node3 yum -y install flannel
+master:
+     /etc/etcd/etcd.conf
+     ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379"
+     systemctl restart etcd
+     etcdctl mk /atomic.io/network/config '{"Network": "10.254.0.0/16", "Backend": {"Type": "vxlan"}}'
+minion:
+     package: flannel
+     /etc/sysconfig/flanneld
+     FLANNEL_ETCD_ENDPOINTS="http://192.168.1.100:2379"
+
+
+4台:systemctl restart flanneld docker
+然后4台查看ifconfig 网卡的变化
+[root@localhost ~]# curl http://192.168.1.30:5000/v2/_catalog
+[root@localhost ~]# curl http://192.168.1.30:5000/v2/kubernetes-dashboard-amd64/tags/list
+测试:
+创建两个容器,此容器.yaml是老师写好给的,我们直接创建,起容器
+    kubectl create -f baseos.yaml
+    kubectl create -f kube-dashboard.yaml
+  检查容器是否启动成功(三大不同的命名空间-n):
+     kubectl get pod -o wide
+     kubectl -n get pod -o wide
+网页查看
+http://192.168.1.11:30090/#!/overview?namespace=default
+
+poh是监控容器用的,被stop之后会;自动起来
+kubectl delete -f baseos.yaml
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ http://hadoop.apache.org/docs/                       day10 kubernetes集群简称k8s 30-自定义仓库   10(master) 11 12 13
+1/虚拟私有云VPC创建内网sw
+2 购买虚拟机:
+弹性服务器--->购买弹性服务器--->地区都在一个地区(好用一个内网,不然内网不通)
+3 购买公网IP
+服务列表--->网络--->弹性公网IP
+4 绑定私有IP
+5 配置安全组之后才能访问:弹性服务器--->安全组
+6 安装华为内部yum源
+mkdir -p /etc/yum.repos.d/repo_bak/
+mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/repo_bak/
+curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.myhuaweicloud.com/repo/CentOS-Base-7.repo
+yum makecache
+lrzsz
+sz
+rz
+
+
+跳板机:
+1 自定义yum源 ftp
+2 ansible服务器
+3 dns server
+yum -y install vsftpd ansible createrepo chrony.x86_64 lrzsz bash-completion.noarch
+mkdir -p /etc/yum.repos.d/repo_bak/
+mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/repo_bak/
+curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.myhuaweicloud.com/repo/CentOS-Base-7.repo
+yum makecache
+vim /etc/chrony.conf
+   server ntp.myhuaweicloud.com iburst
+systemctl restart chronyd.service 
+chronyc sources -v
+给跳板机传私钥文件id_rsa
+chmod 400 id_rsa
+
+业务主机:
+购买的时候指定公钥
+系统yum源
+指定自定义yum源
+安装常用软件包
+配置dns服务器
+
+制作rpm软件包
+写playbook
+安装部署
+cd /etc/yum.repos.d
+curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.myhuaweicloud.com/repo/CentOS-Base-7.repo
+yum makecache
+vim local.repo
+yum -y install bash-completion.noarch vim net-tools rsync chrony lrzsz bind bind-chroot ansible
+vim /etc/chrony.conf
+   server ntp.myhuaweicloud.com iburst
+systemctl restart chronyd.service 
+chronyc sources -v
+vim /etc/named.conf
+     listen-on port 53 { 192.168.1.176; };
+     allow-query     { any; };
+     forwarders{ 100.125.1.250;100.125.136.29; };   写下面两个no的上面
+     dnssec-enable no;
+     dnssec-validation no;
+
+cp /opt/nginx.service /lib/systemd/system/
+/usr/local/nginx/sbin/nginx -s stop
+cat nginx.service
+vim /usr/local/nginx/conf/nginx.conf
+     pid        /var/run/nginx.pid;
+systemctl start nginx.service
 
 
