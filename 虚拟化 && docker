@@ -552,7 +552,7 @@ web
 db
 
 [all:vars]
-ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件,适用与有多个密钥文件
+ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件,适用与有多个密钥文件  私钥密钥名
 命令基础:
     ansible 主机集合 -m 模块名称 -a 模块参数
     [root@ansible ~]# ansible web --list-hosts    查看组成员
@@ -587,7 +587,7 @@ ansible_ssh_private_key_file="/root/.ssh/key"        使用的私钥密钥文件
    
    [root@ansible ~]# ansible db -m replace -a 'path="/etc/my.cnf" regexp="row$" replace=mixed""'                         修改只匹配的
    [root@ansible ~]# ansible db -m shell -a 'grep "^binlog-fortmat" /etc/my.cnf'
-7 yum模块
+7 yum模块  能看到返回状态,shell没有返回状态
    [root@ansible ~]# ansible db -m yum -a 'name=mariadb-server state=installed'
 8 service模块启动服务
    [root@ansible ~]# ansible db -m service -a 'name=mariadb state=started enabled=yes'
@@ -854,7 +854,7 @@ DB-->Databases-->Tables-->Rows-->Columns
 关系型  数据库       表         行          列
 ES-->indices-->Types-->Documents-->Fields
 ES    索引       类型       文档          域(字段)
-ES数据库NoSQL非关系型集群安装
+ES数据库NoSQL非关系型集群安装 5台都装
 * 修改配置文件/etc/hosts
  192.168.1.51 es1
  192.168.1.52 es2
@@ -883,21 +883,18 @@ ES数据库NoSQL非关系型集群安装
 
 
 
-
-
-
-3个插件:
+3个插件(安装哪台,哪台才能使用):
 安装插件:
 [root@es1 bin]# pwd
 /usr/share/elasticsearch/bin
-[root@es1 bin]# ./plugin install file:///usr/share/elasticsearch/bin/bigdesk-master.zip 
+[root@es1 bin]# ./plugin install file:///usr/share/elasticsearch/bin/bigdesk-master.zip   1个副本,就是复制原始数据1份能在这个看到库
 [root@es1 bin]# ./plugin install file:///usr/share/elasticsearch/bin/elasticsearch-head-master.zip 
 [root@es1 bin]#  ./plugin install file:///usr/share/elasticsearch/bin/elasticsearch-kopf-master.zip 
 [root@es1 bin]#  ./plugin list                           查看安装的组件
 [root@es1 bin]#  history
 [root@es1 bin]# firefox http://192.168.1.51:9200/_plugin/head/
 
-head插件:
+head插件:展现集群的拓扑结构
 http://192.168.1.51:9200/_plugin/head/
 kopf插件:是一个Ela的的管理工具,提供了对ES集群操作的API
 http://192.168.1.51:9200/_plugin/kopf/#!/cluster
@@ -1040,7 +1037,8 @@ filter{
 }
 output ES模块:
 
-* filebeat监控所有web主机的log
+* filebeat监控所有web主机的log(是logstash上的5044端口)
+  yum -y install filebeat
 1 web主机安装filebeat
 [root@an_web1 ~]#  vim/etc/filebeat/filebeat.yml  
 paths:
@@ -1051,13 +1049,29 @@ hosts: ["localhost:9200"]                //加上注释
 logstash:                    //去掉注释
 hosts: ["192.168.1.57:5044"]     //去掉注释,logstash那台主机的ip
 [root@se5 ~]# systemctl start filebeat
-2  logstash服务器配置文件更新
+[root@web-0001 logs]# grep -Pv "^\s*(#|$)" /etc/filebeat/filebeat.yml
+filebeat:
+  prospectors:
+    -
+      paths:
+        - /usr/local/nginx/logs/access.log
+      input_type: log
+      document_type: nginx_log
+  registry_file: /var/lib/filebeat/registry
+output:
+hosts: ["192.168.1.71:5044"]
+shipper:
+logging:
+  files:
+    rotateeverybytes: 10485760 # = 10MB
+[root@web-0001 logs]#
+2  logstash服务器配置文件更新都是读本地的logstash,吃内存(每个web服务器上装一个filebeat,通过网络发给logstash)
 input{
   stdin{
     codec => json
   }
   beats{
-    port => 5044
+    port => 5044          (只需要一个端口号就能与监听web服务器的log日志)
   }
   file{
     start_position => "beginning"
@@ -1541,6 +1555,7 @@ nn01	Mode: observer
 
 
 Kafka集群:
+是由Linkedin开发的一个分布式的消息系统
 读缓存
 [root@node1 hadoop]# tar -xf kafka_2.12-2.1.0.tgz
 [root@node1 ~]# mv kafka_2.12-2.1.0 /usr/local/kafka
@@ -1745,5 +1760,198 @@ cat nginx.service
 vim /usr/local/nginx/conf/nginx.conf
      pid        /var/run/nginx.pid;
 systemctl start nginx.service
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------###################################################################################################################################################
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ http://hadoop.apache.org/docs/                       day11   华为云搭建HA Lb
+单7层用keeplived+nginx
+4 层+7层混合用的话是keepliced+haproxy
+
+华为负载均衡:
+网络--->负载均衡--->创建--->自己购买的公网IP--->监听器(前段服务)--->后端服务器--->选中后端主机之后等1分钟健康检查会自动好
+
+可以查看每台的主机名和访问次数,用于排错
+修改配置文件:
+在web服务器上求改配置文件上传至跳板机:
+vim /usr/local/nginx/conf/nginx.conf
+   add_header cluster_id "${HOSTNAME}";
+[root@proxy ~]# ansible web -m copy -a 'src=/root/nginx.conf dest=/usr/local/nginx/conf/nginx.conf'
+[root@proxy ~]# cat restar.yml 
+---
+- hosts: all
+  remote_user: root
+  tasks: 
+    - name: yum restart nginx
+      service: 
+        name: nginx
+        state: restarted
+
+[root@proxy ~]# ansible-playbook restar.yml
+
+排错验证:
+[root@proxy ~]# curl -i http://192.168.1.14
+   其中有一行:cluster_id: web-0004
+
+[student@room9pc01 ~]$ for i in {1..100}; do curl -si http://139.9.101.225/ |grep -P "cluster_id"; done  | sort|uniq -c
+      9 cluster_id: web-0001
+     12 cluster_id: web-0002
+     14 cluster_id: web-0003
+      8 cluster_id: web-0004
+     15 cluster_id: web-0005
+     13 cluster_id: web-0006
+     18 cluster_id: web-0007
+     11 cluster_id: web-0008
+[student@room9pc01 ~]$ 
+配置keepalived和haproxy华为云为ha-0001和ha-0002
+虚拟IP需要绑定服务器才能通
+虚拟私有云--->sw-1--->subnet-001--->虚拟IP绑定服务器和浮动ip绑定公有IP
+
+高可用
+高并发
+高扩展
+高性能
+
+动静分离lvs不能做,lvs能提高客户访问量
+性能 lvs>haproxy>nginx
+功能 lvs<haproxy<nginx
+nginx 能带30来台 带健康检查 支持正则
+haproxy  30~50台 支持部分正则
+lvs    不带健康检查 高并发要好
+
+几万台用lvs+haproxy、nginx结合
+lvs+fullbat
+
+lvs   4层
+nginx和haproxy  是4 7层
+nginx   7层
+
+nginx tomcat动静结合
+haproxy配置:
+frontend  webserver *:80
+    acl url_static       path_end       -i .jpg .gif .png .css .js .html
+    acl url_dynamic      path_end       .php
+    acl url_jsp          path_end       .jsp .do
+
+    use_backend static            if url_static
+    use_backend webs              if url_dynamic
+    use_backend jsp               if url_jsp
+    default_backend               webs
+backend webs *:80
+   balance roundrobin
+   server web-0001 192.168.1.11:80 check inter 2000 rise 2 fall 5
+   server web-0002 192.168.1.12:80 check inter 2000 rise 2 fall 5
+   server web-0003 192.168.1.13:80 check inter 2000 rise 2 fall 5
+   server web-0004 192.168.1.14:80 check inter 2000 rise 2 fall 5
+   server web-0005 192.168.1.15:80 check inter 2000 rise 2 fall 5
+backend static *:80
+   balance roundrobin
+   server web-0006 192.168.1.16:80 check inter 2000 rise 2 fall 5
+   server web-0007 192.168.1.17:80 check inter 2000 rise 2 fall 5
+   server web-0008 192.168.1.18:80 check inter 2000 rise 2 fall 5
+backend jsp *:80
+   balance roundrobin
+   server web-0001 192.168.1.11:8080 check inter 2000 rise 2 fall 5
+   server web-0002 192.168.1.12:8080 check inter 2000 rise 2 fall 5
+   server web-0003 192.168.1.13:8080 check inter 2000 rise 2 fall 5
+   server web-0004 192.168.1.14:8080 check inter 2000 rise 2 fall 5
+   server web-0005 192.168.1.15:8080 check inter 2000 rise 2 fall 5
+
+ceph脚本实现配置
+环境准备:
+1 免密钥登录(步骤省略)
+2 域名DNS解析node1可用无密码连接node1,node2,node3
+3 为所有ceph节点配置yum源，并将配置同步给所有节点
+4 所有服务器NTP服务器同步时间
+5 分区vdb(1 2),还要有vdc vdd 共4块硬盘
+ 以上准备好之后开始配置文件系统集群
+[root@node1 ~]# yum -y install ceph-deploy
+[root@node1 ~]# mkdir ceph-cluster
+[root@node1 ~]# cd ceph-cluster
+[root@node1 ceph-cluster]# ceph-deploy new node1 node2 node3
+[root@node1 ceph-cluster]# for i in node1 node2 node3  有交互所以没有写进ansible-playbook
+do
+     ssh $i "parted /dev/vdb mklabel gpt"
+     ssh $i "parted /dev/vdb mkpart primary 1 50%"
+     ssh $i "parted /dev/vdb mkpart primary 50% 100%"
+ done
+[root@proxy ~]# cat ceph.yml                      以下全是ansible-playbook脚本实现(注意:其中script模块调用脚本,此脚本内容放在下面做参考)
+---
+- hosts: ceph
+  remote_user: root
+  tasks: 
+    - name: yum install ceph-mon ceph-osd ceph-mds
+      yum: 
+        name: ceph-mon,ceph-osd,ceph-mds
+        #state: latest
+        #register: result 
+- hosts: ceph-cluster
+  remote_user: root
+  tasks:
+    - name: command
+      shell: ceph-deploy mon create-initial
+      args:
+        chdir: /root/ceph-cluster
+- hosts: ceph
+  remote_user: root
+  tasks:
+    - name: script ceph.sh
+      script: /root/jiaoben/ceph.sh
+- hosts: ceph-cluster
+  remote_user: root
+  tasks:
+    - name: command ceph-0001
+      shell: ceph-deploy disk  zap  ceph-0001:vdc   ceph-0001:vdd
+      args:
+        chdir: /root/ceph-cluster
+    - name: command ceph-0002
+      shell: ceph-deploy disk  zap  ceph-0002:vdc   ceph-0002:vdd
+      args:
+        chdir: /root/ceph-cluster
+    - name: command ceph-0003
+      shell: ceph-deploy disk  zap  ceph-0003:vdc   ceph-0003:vdd 
+      args:
+        chdir: /root/ceph-cluster
+    - name: command ceph-0001
+      shell: ceph-deploy osd create  ceph-0001:vdc:/dev/vdb1 ceph-0001:vdd:/dev/vdb2
+      args:
+        chdir: /root/ceph-cluster
+    - name: command ceph-0002
+      shell: ceph-deploy osd create  ceph-0002:vdc:/dev/vdb1 ceph-0002:vdd:/dev/vdb2
+      args:
+        chdir: /root/ceph-cluster
+    - name: command ceph-0003
+      shell:  ceph-deploy osd create  ceph-0003:vdc:/dev/vdb1 ceph-0003:vdd:/dev/vdb2
+      args:
+        chdir: /root/ceph-cluster
+    - name: command mds
+      shell: ceph-deploy mds create ceph-0003
+      args:
+        chdir: /root/ceph-cluster
+    - name: command osd pool
+      shell: ceph osd pool create cephfs_data 128
+      args:
+        chdir: /root/ceph-cluster
+    - name: command osd pool
+      shell: ceph osd pool create cephfs_metadata 128
+      args:
+        chdir: /root/ceph-cluster
+    - name: command myfs1
+      shell: ceph fs new myfs1 cephfs_metadata cephfs_data
+      args:
+        chdir: /root/ceph-cluster
+[root@proxy ~]# 
+脚本内容:   调用的脚本
+[root@proxy jiaoben]# cat ceph.sh 
+#!/bin/bash
+chown  ceph.ceph  /dev/vdb1
+chown  ceph.ceph  /dev/vdb2
+echo 'ENV{DEVNAME}=="/dev/vdb1",OWNER="ceph",GROUP="ceph"' >> /etc/udev/rules.d/70-vdb.rules
+echo 'ENV{DEVNAME}=="/dev/vdb2",OWNER="ceph",GROUP="ceph"' >> /etc/udev/rules.d/70-vdb.rules
+
+
+
+
+
+
 
 
