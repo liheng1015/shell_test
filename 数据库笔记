@@ -620,7 +620,7 @@ mysqldump备份缺点:
       103  rm -rf *
       104  ls
       105  innobackupex --apply-log /root/allbak/       准备恢复数据                
-      106  innobackupex --copy-  /root/allbak/       开始恢复数据
+      106  innobackupex --copy-back  /root/allbak/       开始恢复数据
       107  ls -ld /var/lib/mysql
       108  ls -l /var/lib/mysql
       109  chown -R mysql:mysql /var/lib/mysql          给所有者和组为mysql
@@ -1379,7 +1379,17 @@ vim /etc/hosts
 
     任意一台添加授权用户用于客户端登录  (注意:建表时,必须有主键字段primary key)
     73#grant all on *.* to lh@"%" identified by "123456";
-    50#mysql -uroot -p123456 -h192.168.4.71
+    50#mysql -ulh -p123456 -h192.168.4.71
+     1.9.2 在客户端使用授权用户连接任意数据库服务器都可以存储数据，且可以查看到同样的数据
+[root@host50 ~]# mysql -h192.168.4.73 -uyaya10 -p123456
+mysql> create table db10.b(id int  primary key auto_increment,name char(10));
+mysql> insert into db10.b (name)values("bob");
+mysql> insert into db10.b (name)values("tom");
+mysql> insert into db10.b (name)values("lucy");
+mysql> select  * from db10.b;
+mysql> exit;
+]# mysql -h192.168.4.72 -uyaya10 -p123456 (执行select 和 insert)
+]# mysql -h192.168.4.71 -uyaya10 -p123456 (执行select 和 insert)
 
     集群功能:
      在任意一台服务器上添加访问数据的授权用户
@@ -1943,7 +1953,7 @@ redis集群6台服务器
    95  ls /usr/lib64/php/modules/
    96  vim /etc/php.ini 
         728 extension_dir = "/usr/lib64/php/modules/"
-        730 extension = "redis.so"
+        730 extension = "redis.so"   切记extension_dir要把dir去掉
    97  systemctl restart php-fpm
    99  vim /etc/php.ini 
   102  ls /opt/
@@ -2048,6 +2058,81 @@ vrrp_instance VI_1 {
 [root@lb-host88 ~]#systemctl restart keepalived.service 
 [root@lb-host88 ~]#iptables -F
 [root@lb-host88 ~]#setenforce 0
+
+
+mycat的读写分离:
+[root@ecs-mysql-mycat-0003 conf]# vim schema.xml
+<?xml version="1.0"?>
+<!DOCTYPE mycat:schema SYSTEM "schema.dtd">
+<mycat:schema xmlns:mycat="http://io.mycat/">
+    <schema name="lh" checkSQLschema="false" sqlMaxLimit="100" dataNode="dn1">
+    </schema>
+    <dataNode name="dn1" dataHost="pxc1" database="lh" />
+    <dataHost name="pxc1" maxCon="1000" minCon="10" balance="3"
+              writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+        <heartbeat>select user()</heartbeat>
+        <!-- can have multi write hosts -->
+        <writeHost host="hostM1" url="192.168.1.51:3306" user="jim"
+                   password="123qqq...A">
+            <!-- can have multi read hosts -->
+            <readHost host="hostS1" url="192.168.1.54:3306" user="jim" password="123qqq...A" />
+            <readHost host="hostS2" url="192.168.1.55:3306" user="jim" password="123qqq...A" />
+            <readHost host="hostS3" url="192.168.1.56:3306" user="jim" password="123qqq...A" />
+        </writeHost>
+        <writeHost host="hostM2" url="192.168.1.52:3306" user="jim"
+                   password="123qqq...A">
+            <!-- can have multi read hosts -->
+            <readHost host="hostS1" url="192.168.1.54:3306" user="jim" password="123qqq...A" />
+            <readHost host="hostS2" url="192.168.1.55:3306" user="jim" password="123qqq...A" />
+            <readHost host="hostS3" url="192.168.1.56:3306" user="jim" password="123qqq...A" />
+        </writeHost>
+        <writeHost host="hostM1" url="192.168.1.53:3306" user="jim"
+                   password="123qqq...A">
+            <!-- can have multi read hosts -->
+            <readHost host="hostS1" url="192.168.1.54:3306" user="jim" password="123qqq...A" />
+            <readHost host="hostS2" url="192.168.1.55:3306" user="jim" password="123qqq...A" />
+            <readHost host="hostS3" url="192.168.1.56:3306" user="jim" password="123qqq...A" />
+        </writeHost>
+    </dataHost>
+</mycat:schema>
+修改配置文件在最后两行更改下即可:
+        <user name="root">
+                <property name="password">123456</property>
+                <property name="schemas">lh</property>                     更改
+
+                <!-- 表级 DML 权限设置 -->
+                <!--            
+                <privileges check="false">
+                        <schema name="TESTDB" dml="0110" >
+                                <table name="tb01" dml="0000"></table>
+                                <table name="tb02" dml="1111"></table>
+                        </schema>
+                </privileges>           
+                 -->
+        </user>
+
+        <user name="user">
+                <property name="password">user</property>
+                <property name="schemas">lh</property>                     更改
+                <property name="readOnly">true</property>
+
+[root@ecs-mysql-mycat-0001 conf]# /usr/local/mycat/bin/mycat start
+[root@ecs-mysql-mycat-0001 conf]# ss -antulp | grep :8066
+[root@ecs-mysql-mycat-0001 conf]# mysql -u root -p123456 -h 192.168.1.7 -P 8066     登录验证
+
+
        
+
+
+
+
+
+
+
+
+
+
+
+
 
 
