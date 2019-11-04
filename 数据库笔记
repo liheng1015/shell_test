@@ -42,6 +42,7 @@ mysql> alter user root@"localhost" identified by "tarena";
 库管理命令:
       show databases;         显示库
       select user();          显示连接用户 
+	desc departments;       查看表字段
       use 库名;                     切换库
       select database();      显示当前所在的库
       create database 库名;      创建库
@@ -65,7 +66,7 @@ create table 库名.表名(
 整型正负 微小整型tinyint -128~127 小整形 smallint;
 浮点型 单精度float 双精度double)
 小数点整数5位,小数:create table t5 (name char(5),gz float(7,2));insert into t5 values("bob",99999.99);
-日期时间型(日期时间datetime)datetime  timestamp  time  year  date
+日期时间型(日期时间datetime)datetime                  time  year  date
 mysql> create table t7 (name char(5),your_start year,up_time time,birthday date,party datetime);
 mysql> insert into t7 values ("bob",1990,083000,20191120,20190707213045);
 mysql> insert into t7 values ("jerry",year(20190803),curtime(),curdate(),now());
@@ -683,9 +684,9 @@ mysqldump备份缺点:
                                                   day6 主从同步   ftp://172.40.50.117/2019/homework/
  
 一、mysql主从同步
-      异步复制:
-      全同步复制:
-      半同步复制:
+      异步复制:主库在执行完客户端提交的事务后会立即将结果返给 客户端，并不关心从库是否已经接收并处理
+      全同步复制:当主库执行完一个事务，所有的从库都执行了该事务 才返回给客户端
+      半同步复制:介于异步复制和全同步复制之间，主库在执行完客户 端提交的事务后不是立刻返回给客户端，而是等待至 少一个从库接收到并写到 relay log 中才返回给客户端
 
     1.1 主从同步介绍
     1.2 主从同步原理
@@ -1697,6 +1698,7 @@ redis的主从同步过程:从向主发送sync命令,主收到把所有数据存
          一主多从:就是在选一台与上述永久配置的从服务器52配置一样.
          主从从:与上配置一致
          注意:默认情况当主宕机之后,从服务器不会自动升级主服务器,需要和别的哨兵服务一起实现.
+         主从复制原理:从服务起,向主发送syn同步数据,主服务器把后端盘所有数据完全备份到从服务器的内存里,也会把从服务器之前的数据全给覆盖掉.
 2、哨兵服务
    什么是哨兵服务: 
              监视master服务器
@@ -1711,19 +1713,18 @@ redis的主从同步过程:从向主发送sync命令,主收到把所有数据存
                     sentinel monitor redis54 192.168.4.54 6354 1
            启动哨兵服务:[root@host57 redis-4.0.8]# redis-sentinel /etc/sentinel.conf
 
-3、数据持久化  数据永久存储的方式(RDB和AOF)
-       RDB:记录数据的文件
-            默认的存储数据在/var/lib/redis/6379/dump.rdb   默认15分钟1个key 5分钟10个key 1分钟10000个key会自动保存
+3、数据持久化  是数据永久存储保存在硬盘上 方式有两种(RDB和AOF)
+       RDB:记录数据的文件 按照指定时间间隔,将内存中的数据集快照写入硬盘
+            默认的存储数据在/var/lib/redis/6379/dump.rdb   默认15分钟1个key改变存盘 5分钟10个key改变存盘 1分钟10000个key会自动保存
             数据恢复:scp dump.rdb root@192.168.4.59:/var/lib/redis/6379/dump.rdb
                  59先关闭在删除在scp再重启即可
-           优点:
+           优点:高性能的持久化,适合大规模数据恢复.(会在子进程下持久化操作)
                
-           缺点:
-               意外宕机时,丢失最后一次持久化的所有数据,是硬件坏掉,不是shutdown,不会自动保存.
-       AOF:记录命令的文件(一般和RDB一起用,RDB是存数据,AOF是记录操作,如果只有AOF,服务重启之后查看数据就是空的,没有重启,数据在内存上有)
+           缺点:意外宕(dang)机时,丢失最后一次持久化的所有数据,是硬件坏掉,不是shutdown,不会自动保存.
+       AOF:是一个文件,记录命令的文件(一般和RDB一起用,RDB是存数据,AOF是记录操作,如果只有AOF,服务重启之后查看数据就是空的,没有重启,数据在内存上有)
             优点:灵活设置持久化方式体现在三种存盘方式always everysex no
                  出现意外宕机,仅可能丢失1s的数据
-            缺点:
+            缺点:速度慢
                  持久化的体积通常会大于RDB,因为是把每个操作记录到.aof文件
                  执行sync策略时的速度会比RDB方式慢 主从
              设置和永久配置aof文件
